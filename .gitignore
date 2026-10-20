@@ -21,3 +21,6 @@ _rprof/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 备份文件（体积大且含个人数据）
+backups/
