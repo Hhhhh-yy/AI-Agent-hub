@@ -468,32 +468,113 @@ window.ChatPage = (function () {
   }
 
   function fmtMarkdown(text) {
-    // 先抽 SVG 块，再转义，最后回填（否则 <svg> 会变成 &lt;svg 只显示成文本）
+    // 顺序很重要：先抽代码块和 SVG，再转义，最后回填并处理换行。
     const svgStore = [];
+    const codeStore = [];
     let raw = String(text || "");
+
+    // ① 抽出 ```svg
     raw = raw.replace(/```svg\r?\n?([\s\S]*?)```/gi, function (m, code) {
-      const clean = sanitizeSvg(code);
-      const idx = svgStore.push(clean) - 1;
-      return "\u0000SVGBLOCK" + idx + "\u0000";
+      const idx = svgStore.push(sanitizeSvg(code)) - 1;
+      return "\u0000SVG" + idx + "\u0000";
     });
 
+    // ② 抽出其它 ```lang 代码块（先抽出，避免里面的 < > 被转义，也避免被换行处理破坏）
+    raw = raw.replace(/```([a-zA-Z0-9+#._-]*)\r?\n?([\s\S]*?)```/g, function (m, lang, code) {
+      const idx = codeStore.push({ lang: lang || "sh", code: code.replace(/\s+$/, "") }) - 1;
+      return "\u0000CODE" + idx + "\u0000";
+    });
+
+    // ③ 转义（此时正文里已无代码块）
     let out = App.escape(raw);
 
-    out = out.replace(/\u0000SVGBLOCK(\d+)\u0000/g, function (m, i) {
-      const clean = svgStore[Number(i)] || "";
-      return '<div class="svg-block" data-svg="' + encodeURIComponent(clean) + '">' +
-        '<div class="svg-bar">🖼️ 示意图 <button class="chip svg-dl">下载 PNG</button>' +
-        '<button class="chip svg-src-btn">看源码</button></div>' +
-        '<div class="svg-body"></div><pre class="svg-src">' + App.escape(clean) + '</pre></div>';
-    });
-
-    out = out.replace(/```([a-zA-Z0-9+#._-]*)\r?\n?([\s\S]*?)```/g, function (m, lang, code) {
-      return '<pre class="md-code" data-lang="' + (lang || "sh") + '">' + code.replace(/\s+$/, "") + '</pre>';
-    });
+    // ④ 行内 markdown（必须在换行处理之前，且不能跨行）
     out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img class="bubble-img" alt="$1" src="$2">');
     out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
     out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    out = out.replace(/^#{1,3}\s?(.+)$/gm, "<b>$1</b>");
+    out = out.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+
+    // ⑤ 按行处理：标题 / 有序列表 / 无序列表 / 普通段落 / 空行
+    const lines = out.split(/\r?\n/);
+    const html = [];
+    let listType = "";        // "ol" | "ul" | ""
+    let para = [];            // 累积普通行
+
+    function flushPara() {
+      if (para.length) {
+        html.push('<p class="md-p">' + para.join("<br>") + '</p>');
+        para = [];
+      }
+    }
+    function closeList() {
+      if (listType) { html.push("</" + listType + ">"); listType = ""; }
+    }
+
+    lines.forEach(function (line) {
+      const t = line.trim();
+
+      // 空行 → 结束当前段落与列表
+      if (!t) {
+        flushPara(); closeList();
+        return;
+      }
+
+      // 标题：# / ## / ###
+      const h = /^(#{1,4})\s+(.+)$/.exec(t);
+      if (h) {
+        flushPara(); closeList();
+        const lvl = Math.min(h[1].length + 2, 5);
+        html.push('<h' + lvl + ' class="md-h">' + h[2] + '</h' + lvl + '>');
+        return;
+      }
+
+      // 有序列表：1. / 2) / ①
+      const ol = /^(\d{1,2})[.、)]\s+(.+)$/.exec(t) || /^([①②③④⑤⑥⑦⑧⑨⑩])\s*(.+)$/.exec(t);
+      if (ol) {
+        flushPara();
+        if (listType !== "ol") { closeList(); html.push('<ol class="md-ol">'); listType = "ol"; }
+        html.push("<li>" + ol[2] + "</li>");
+        return;
+      }
+
+      // 无序列表：- / * / •
+      const ul = /^[-*•]\s+(.+)$/.exec(t);
+      if (ul) {
+        flushPara();
+        if (listType !== "ul") { closeList(); html.push('<ul class="md-ul">'); listType = "ul"; }
+        html.push("<li>" + ul[1] + "</li>");
+        return;
+      }
+
+      // 步骤/小标题行（步骤 1：xxx、第 1 步：xxx、**xxx**）→ 单独成段并加粗
+      if (/^(步骤\s*\d|第\s*\d\s*步|Step\s*\d)/i.test(t)) {
+        flushPara(); closeList();
+        html.push('<p class="md-step">' + t + '</p>');
+        return;
+      }
+
+      // 普通行 → 进段落（内部用 <br> 连接）
+      closeList();
+      para.push(line);
+    });
+
+    flushPara();
+    closeList();
+    out = html.join("\n");
+
+    // ⑥ 回填代码块与 SVG
+    out = out.replace(/\u0000CODE(\d+)\u0000/g, function (m, i) {
+      const c = codeStore[Number(i)] || { lang: "sh", code: "" };
+      return '<pre class="md-code" data-lang="' + c.lang + '">' + c.code + '</pre>';
+    });
+    out = out.replace(/\u0000SVG(\d+)\u0000/g, function (m, i) {
+      const clean = svgStore[Number(i)] || "";
+      return '<div class="svg-block" data-svg="' + encodeURIComponent(clean) + '">' +
+        '<div class="svg-bar">\ud83d\uddbc\ufe0f \u793a\u610f\u56fe <button class="chip svg-dl">\u4e0b\u8f7d PNG</button>' +
+        '<button class="chip svg-src-btn">\u770b\u6e90\u7801</button></div>' +
+        '<div class="svg-body"></div><pre class="svg-src">' + App.escape(clean) + '</pre></div>';
+    });
+
     return out;
   }
 
@@ -820,7 +901,15 @@ window.ChatPage = (function () {
     "3. 表格只在「真正并列的 3 项以上」时用；能一句话说完的，不许做成表格。",
     "4. 分割线 --- 全文**最多 1 条**，只放在「正式开始动手」之前。",
     "5. 单行不超过 40 字；超了就换行，不要让我横向读长句。",
-    "6. 代码块之外，不要用 emoji 做条目符号；条目用 1. 2. 3.。"
+    "6. 代码块之外，不要用 emoji 做条目符号；条目用 1. 2. 3.。",
+    "",
+    "【结构硬约束（这条最常被违反，务必遵守）】",
+    "· **每个编号必须独占一行**，编号后**空一行再接下一个编号**，绝不把 5. 和 6. 挤在同一段里。",
+    "· **步骤必须有前缀**：写「步骤 1：建虚拟环境」「步骤 2：看清脏在哪」，而不是「1. 建虚拟环境」然后跟一大段。",
+    "· **每个步骤内部结构固定**：先一行「做什么：…」，再代码块，再一行「预期：…」，最后一行「⚠️ 坑：…」。四块之间空行。",
+    "· **代码块前后各留一个空行**，不要把文字紧贴在 ``` 上。",
+    "· 一段话超过 3 行就拆成两段；超过 3 个并列点就用列表。",
+    "· 结尾的「下一步」必须是独立小标题 + 编号列表，不要塞在段落里。"
   ];
 
   function teachPrompt(week, task) {
