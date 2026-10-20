@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Agent 学习中枢</title>
+<link rel="stylesheet" href="assets/css/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ================= 侧边栏 ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">AI</div>
+      <div class="brand-text">
+        <strong>学习中枢</strong>
+        <span>AI Agent / 大模型应用</span>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="roadmap">
+        <span class="nav-ico">🗺️</span><span>学习路线图</span>
+      </button>
+      <button class="nav-item" data-view="resume">
+        <span class="nav-ico">📄</span><span>简历工坊</span>
+      </button>
+      <button class="nav-item" data-view="interview">
+        <span class="nav-ico">🎤</span><span>模拟面试官</span>
+      </button>
+      <button class="nav-item" data-view="chat">
+        <span class="nav-ico">💬</span><span>答疑与汇报</span>
+      </button>
+      <button class="nav-item" data-view="memory">
+        <span class="nav-ico">🧠</span><span>长期记忆</span>
+      </button>
+      <button class="nav-item" data-view="trending">
+        <span class="nav-ico">🐙</span><span>GitHub 热榜</span>
+      </button>
+    </nav>
+
+    <div class="side-progress">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120">
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fg" id="sideRing" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-label"><b id="sideRingPct">0%</b><span>总进度</span></div>
+      </div>
+      <div class="side-mini" id="sideMini">
+        <div><span>已完成任务</span><b id="sideDone">0</b></div>
+        <div><span>累计时长</span><b id="sideHours">0h</b></div>
+        <div><span>距投递</span><b id="sideCountdown">—</b></div>
+      </div>
+    </div>
+
+    <div class="side-foot">
+      <button class="ghost-btn" id="btnSettings">⚙️ 模型设置</button>
+      <button class="ghost-btn" id="btnExportState">⬇️ 导出进度</button>
+    </div>
+  </aside>
+
+  <!-- ================= 主区 ================= -->
+  <main class="main">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <span class="muted small">成员数据互相独立 · 可切换查看</span>
+      </div>
+      <div class="topbar-right">
+        <span class="tag" id="topUserMeta"></span>
+        <div class="user-chip-wrap">
+          <button class="user-chip" id="btnUserChip">
+            <span id="chipEmoji">🙋</span>
+            <span id="chipName">加载中…</span>
+            <span class="caret">▾</span>
+          </button>
+          <div class="user-menu hidden" id="userMenu"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- 1. 路线图 ---------- -->
+    <section class="view active" id="view-roadmap">
+      <header class="page-head">
+        <div>
+          <h1>学习路线图</h1>
+          <p class="sub" id="roadmapSub">20 周冲刺暑期实习 · 目标：AI Agent / 大模型应用开发</p>
+        </div>
+        <div class="head-actions">
+          <button class="ghost-btn" id="btnExpandAll">展开全部</button>
+          <button class="ghost-btn" id="btnCollapseAll">收起全部</button>
+        </div>
+      </header>
+
+      <div class="kpis" id="kpis"></div>
+
+      <div class="panel hidden" id="requestPanel"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>⏱️ 时间轴</h2>
+          <span class="tag" id="todayTag"></span>
+        </div>
+        <div class="timeline" id="timeline"></div>
+      </div>
+
+      <!-- 里程碑已移除：时间轴 → 逐周任务 直接衔接 -->
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>📚 逐周任务</h2>
+          <div class="legend" id="needLegend"></div>
+        </div>
+        <p class="muted small" style="margin:0 0 12px"><b>取舍原则</b>：只深挖「AI 越强越值钱」的判断力（评估、归因、取舍、安全）；命令与配置这类半年一换的东西，拿到能跑就够了，不花时间练。</p>
+        <div id="weekList"></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>💻 两台机器怎么分工</h2><span class="muted">自动按当前机器调整</span></div>
+          <div id="machinePlan"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>🛡️ 抗过时策略</h2></div>
+          <div id="antiObsolescence"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>📍 求职策略</h2></div>
+          <div id="tianjin"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>🔗 资源库</h2><span class="muted">只留必用，收藏夹不等于技能</span></div>
+          <div id="resources"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 2. 简历工坊 ---------- -->
+    <section class="view" id="view-resume">
+      <header class="page-head">
+        <div>
+          <h1>简历工坊</h1>
+          <p class="sub">左侧改内容 · 右侧实时预览 · 一键导出 PDF / Markdown / LaTeX</p>
+        </div>
+        <div class="head-actions">
+          <div class="seg" id="resumeVersionSeg">
+            <button class="seg-item active" data-version="agent">AI Agent 版</button>
+            <button class="seg-item" data-version="control">控制 / 算法版</button>
+          </div>
+          <button class="primary-btn" id="btnPrintResume">🖨️ 导出 PDF</button>
+          <button class="ghost-btn" id="btnExportMd">导出 MD</button>
+          <button class="ghost-btn" id="btnExportTex">导出 LaTeX</button>
+          <button class="ghost-btn" id="btnResetResume">恢复初始</button>
+        </div>
+      </header>
+
+      <div class="resume-layout">
+        <div class="resume-editor" id="resumeEditor"></div>
+        <div class="resume-preview-wrap">
+          <div class="preview-bar">
+            <span class="muted">A4 预览（导出 PDF 时只打印这一页）</span>
+            <span class="tag" id="resumeWordCount"></span>
+          </div>
+          <div class="paper" id="resumePreview"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 3. 模拟面试 ---------- -->
+    <section class="view" id="view-interview">
+      <header class="page-head">
+        <div>
+          <h1>模拟面试官</h1>
+          <p class="sub">按目标单位类型抽题 · 20 题一轮 · 逐题点评 · 输出估计成功率与薄弱点</p>
+        </div>
+        <div class="head-actions">
+          <button class="ghost-btn" id="btnInterviewHistory">历史成绩</button>
+          <button class="ghost-btn" id="btnInterviewSettings">抽题设置</button>
+        </div>
+      </header>
+
+      <div id="interviewSetup" class="panel">
+        <div class="panel-head"><h2>🎯 本轮设置</h2><span class="muted">选好单位类型，题库会按岗位侧重抽题</span></div>
+        <div class="setup-grid">
+          <div class="field">
+            <label>目标单位类型</label>
+            <div class="chips" id="orgTypeChips"></div>
+          </div>
+          <div class="field">
+            <label>难度上限</label>
+            <div class="seg" id="difficultySeg">
+              <button class="seg-item" data-diff="1">只考基础</button>
+              <button class="seg-item active" data-diff="2">基础 + 进阶</button>
+              <button class="seg-item" data-diff="3">含深挖题</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>题量</label>
+            <div class="seg" id="countSeg">
+              <button class="seg-item" data-count="10">10 题（热身）</button>
+              <button class="seg-item active" data-count="20">20 题（标准）</button>
+              <button class="seg-item" data-count="30">30 题（压力面）</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>分类侧重</label>
+            <div class="muted small">可在抽题设置里微调各分类数量</div>
+          </div>
+        </div>
+        <div class="setup-foot">
+          <div class="muted small" id="bankStat">题库加载中…</div>
+          <button class="primary-btn big" id="btnStartInterview">开始面试</button>
+        </div>
+      </div>
+
+      <div id="interviewRun" class="hidden">
+        <div class="run-bar">
+          <div class="run-progress"><div class="bar"><i id="runBar"></i></div><span id="runText">1 / 20</span></div>
+          <div class="run-timer" id="runTimer">02:00</div>
+          <button class="ghost-btn" id="btnEndInterview">结束本轮</button>
+        </div>
+        <div class="panel">
+          <div class="q-meta" id="qMeta"></div>
+          <h2 class="q-text" id="qText"></h2>
+          <textarea id="answerInput" class="answer-box" placeholder="像在真面试里一样口述式作答：先给结论，再分点说理由，最后补一句取舍。Ctrl + Enter 提交。"></textarea>
+          <div class="run-foot">
+            <span class="muted small" id="gradeHint"></span>
+            <div>
+              <button class="ghost-btn" id="btnSkipQuestion">跳过</button>
+              <button class="primary-btn" id="btnSubmitAnswer">提交并评分</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel" id="instantFeedback"></div>
+      </div>
+
+      <div id="interviewReport" class="hidden"></div>
+    </section>
+
+    <!-- ---------- 4. 答疑与汇报（按周分离的独立对话窗） ---------- -->
+    <section class="view" id="view-chat">
+      <header class="page-head">
+        <div>
+          <h1>答疑与汇报</h1>
+          <p class="sub">按周 + 按天两层窗口：点任务的「💡 手把手 / 🔍 深挖」会进<b>那一周</b>的窗口；每天可以用「+ 今天」开一个干净的学习日，它会自动归到对应周下</p>
+        </div>
+        <div class="head-actions">
+          <span class="tag" id="chatModeTag">检查中…</span>
+          <button class="ghost-btn" id="btnClearChat">清空本窗口</button>
+        </div>
+      </header>
+
+      <!-- 窗口标签栏（W1–W20 + 自由窗） -->
+      <div class="win-bar" id="winBar"></div>
+
+      <!-- 关注清单：从 GitHub 热榜加入的项目，直接在这里提问 -->
+      <div class="watch-bar" id="watchBar"></div>
+
+      <div class="chat-layout">
+        <div class="chat-main panel">
+          <div class="chat-messages" id="chatMessages"></div>
+          <div class="chat-quick" id="chatQuick"></div>
+          <div class="chat-attach" id="attachStrip"></div>
+          <div class="chat-input">
+            <button class="ghost-btn attach-btn" id="btnAttach" title="上传图片（也可直接 Ctrl+V 粘贴截图，或把图片拖进来）">📎</button>
+            <input type="file" id="chatFile" accept="image/*" multiple style="display:none" />
+            <textarea id="chatInput" placeholder="例：我卡在 asyncio 并发调用为什么比多线程慢 / 汇报：本周完成了 W3 的 CLI 工具 / 也可以直接粘贴报错截图让我看"></textarea>
+            <button class="primary-btn" id="btnSendChat">发送</button>
+          </div>
+          <p class="muted small" id="chatHint">支持 <b>Ctrl+V 粘贴截图</b>、拖拽图片、或点 📎 上传；模型可看图并针对性讲解。</p>
+        </div>
+        <div class="chat-side">
+          <div class="panel">
+            <div class="panel-head"><h2>📊 我的进度快照</h2></div>
+            <div id="chatProgress"></div>
+            <button class="primary-btn full" id="btnPushProgress">把进度写回工作区</button>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <h2>🔍 本窗口小结</h2>
+              <button class="ghost-btn tiny" id="btnSummarizeWin" title="让模型读一遍本窗口对话，总结你哪里做得好、哪里薄弱">分析</button>
+            </div>
+            <div id="dayOwnerBox" class="hidden"></div>
+            <div id="winSummary"><p class="muted small">点右上「分析」，模型会读这一窗的对话，告出你在这块「做得好 / 还薄弱 / 下一步」。</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  <!-- ---------- 5. 长期记忆 ---------- -->
+    <section class="view" id="view-memory">
+      <header class="page-head">
+        <div>
+          <h1>长期记忆</h1>
+          <p class="sub">存在本机 <code>state/memory.json</code>：清空对话、重启网站、换浏览器都不会丢；每次提问自动带给模型。</p>
+        </div>
+        <div class="head-actions">
+          <button class="ghost-btn" id="btnRefreshEnv">🔄 重新探测环境与工具</button>
+          <button class="ghost-btn" id="btnExportMemory">导出 JSON</button>
+        </div>
+      </header>
+
+      <div class="kpis" id="memKpis"></div>
+
+      <!-- 核心板块：学习原则（这是内置模型最该长期记住的东西） -->
+      <div class="panel principles-panel">
+        <div class="panel-head">
+          <h2>🎯 我的学习原则（内置 AI 必须遵守）</h2>
+          <div class="head-actions">
+            <span class="muted small" id="memPrincipleCount"></span>
+            <button class="ghost-btn" id="btnResetPrinciples" title="恢复成默认的那套原则">恢复默认</button>
+            <button class="primary-btn" id="btnSavePrinciples">保存原则</button>
+          </div>
+        </div>
+        <p class="muted small" style="margin:0 0 10px">
+          这一块比电脑配置重要得多：它决定 AI 该逼你深挖、还是该直接把命令给你。每次提问都会带给模型。
+        </p>
+        <div id="memPrinciples"></div>
+        <div class="mem-add"><input id="memPrincipleInput" placeholder="再加一条，例：任何需要背命令的任务，最多给我 30 分钟" />
+          <button class="ghost-btn" id="btnAddPrinciple">加一条</button></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>👤 学生画像（可编辑）</h2>
+            <button class="ghost-btn" id="btnSaveProfile">保存画像</button></div>
+          <div id="memProfile"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>🖥️ 本机环境（自动探测）</h2><span class="tag" id="memEnvTime">—</span></div>
+          <div id="memEnv" class="env-compact"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>📝 环境补充说明（可编辑，不会被自动覆盖）</h2>
+          <button class="primary-btn" id="btnSaveEnvNotes">保存说明</button></div>
+        <div id="memEnvNotes"></div>
+        <div class="chip-row" style="margin-top:8px"><button class="ghost-btn" id="btnAddEnvNote">+ 新增一条说明</button></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h2>📌 长期备注</h2><span class="muted small" id="memNoteCount"></span></div>
+          <div id="memNotes"></div>
+          <div class="mem-add"><input id="memNoteInput2" placeholder="要它长期记住的事…" />
+            <button class="ghost-btn" id="btnAddNote2">记住</button></div>
+        </div>
+      <div class="panel">
+        <div class="panel-head"><h2>⭐ 我的关注清单</h2>
+          <div class="head-actions">
+            <span class="muted small" id="memWatchCount"></span>
+            <button class="ghost-btn" id="btnExportWatchlist">复制为 Markdown</button>
+            <button class="ghost-btn danger" id="btnClearWatchlist">清空</button>
+          </div></div>
+        <p class="muted small" style="margin:0 0 10px">来自「GitHub 热榜」的收藏，带上推荐等级、类型与原因；会一起进入提问上下文，所以答疑时它也记得你在关注什么。</p>
+        <div id="memWatchlist"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>⚠️ 危险操作</h2></div>
+        <div class="chip-row"><button class="ghost-btn danger" id="btnClearMemory2">重置整个记忆档案</button></div>
+        <p class="muted small" style="margin:10px 0 0">重置后画像与环境会恢复默认并重新探测；问答记忆与里程碑会清空。</p>
+      </div>
+    </section>
+
+  <!-- ---------- 6. GitHub 热榜 ---------- -->
+    <section class="view" id="view-trending">
+      <header class="page-head">
+        <div>
+          <h1>GitHub 热榜 · 按你的情况筛选</h1>
+          <p class="sub">时间窗口内「新建 + star 最多」的项目 Top 20，右侧给出结合你个人情况的推荐等级。</p>
+        </div>
+        <div class="head-actions">
+          <label class="switch"><input type="checkbox" id="trendAiOnly" /><span>只看 AI / Agent 相关</span></label>
+          <button class="ghost-btn" id="btnTrendRefresh">🔄 重新抓取</button>
+        </div>
+      </header>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="seg" id="trendTabs">
+            <button class="seg-item active" data-window="week">近七天</button>
+            <button class="seg-item" data-window="month">近一个月</button>
+            <button class="seg-item" data-window="quarter">近三个月</button>
+            <button class="seg-item" data-window="all">总榜</button>
+          </div>
+          <div class="head-actions">
+            <span class="tag" id="trendMeta">加载中…</span>
+            <button class="primary-btn" id="btnTrendAnalyze">🤖 生成 AI 分析</button>
+          </div>
+        </div>
+        <p class="muted small" id="trendQuery"></p>
+        <div class="trend-auto" id="trendAutoBar"></div>
+        <div class="legend" style="margin:10px 0 6px">
+          <span class="lvl lvl-a">非常推荐</span>
+          <span class="lvl lvl-b">较为推荐</span>
+          <span class="lvl lvl-c">适中</span>
+          <span class="lvl lvl-d">不推荐</span>
+          <span class="kind k-learn">学习相关</span>
+          <span class="kind k-tool">实用工具</span>
+          <span class="kind k-view">视野扩展</span>
+          <span class="muted small">— 等级看值不值得投入，类型看「是学习有帮助，还是单纯好用」</span>
+        </div>
+      </div>
+
+      <div id="trendList"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ================= 设置弹窗 ================= -->
+<div class="modal hidden" id="settingsModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>⚙️ 模型设置</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>API Key <span class="muted small" id="keyState">（只保存在你本机 state/settings.json）</span></label>
+        <input type="password" id="setKey" placeholder="留空 = 保持已保存的 Key 不变" autocomplete="off" />
+      </div>
+      <div class="field row">
+        <div>
+          <label>Base URL</label>
+          <input type="text" id="setBase" placeholder="https://api.deepseek.com" />
+        </div>
+        <div>
+          <label>模型名
+            <button class="ghost-btn" id="btnFetchModels" style="padding:1px 8px;font-size:11.5px;margin-left:6px">拉取列表</button>
+          </label>
+          <input type="text" id="setModel" list="modelList" placeholder="deepseek-chat" />
+          <datalist id="modelList"></datalist>
+        </div>
+      </div>
+      <div class="field row">
+        <div>
+          <label>思考强度（推理型模型专用）</label>
+          <select id="setThinking">
+            <option value="high">高 · 默认推荐（回答最深，最慢）</option>
+            <option value="medium">中 · 平衡</option>
+            <option value="low">低 · 快</option>
+            <option value="off">关闭思考 · 最省 token</option>
+          </select>
+        </div>
+        <div>
+          <label>思考预算（token）</label>
+          <input type="number" id="setBudget" min="0" step="1024" value="16384" />
+        </div>
+      </div>
+      <p class="muted small" style="margin:-6px 0 12px">
+        部分端点默认思考强度偏低，导致回答偏浅。本站会同时下发 <code>reasoning_effort</code> 与
+        <code>enable_thinking + thinking_budget</code>，实测两者在该端点均生效。
+        面试评分固定用「中」档以控制等待时间。
+      </p>
+      <details class="adv">
+        <summary>高级：图片模型 / 视觉模型 / 附加参数</summary>
+        <div class="field row">
+          <div>
+            <label>教学插图模型</label>
+            <input type="text" id="setImageModel" list="modelList" placeholder="qwen-image-3.0-pro" />
+          </div>
+          <div>
+            <label>视觉模型（留空 = 用主模型看图）</label>
+            <input type="text" id="setVisionModel" list="modelList" placeholder="留空即可，主模型已支持看图" />
+          </div>
+        </div>
+        <div class="field">
+          <label>GitHub Token <span class="muted small" id="ghTokenState">（可选：填了热榜抓取配额从 10 次/时 提到 30 次/分）</span></label>
+          <input type="password" id="setGhToken" placeholder="留空 = 不修改" autocomplete="off" />
+        </div>
+        <textarea id="setExtra" placeholder='例如 {"max_tokens": 4096, "top_p": 0.9}'></textarea>
+      </details>
+      <p class="muted small">未配置 Key 时：模拟面试自动降级为「要点比对 + 自评」模式，答疑页走「生成卡片 → 粘到 DSH 找我」。</p>
+      <div class="status-line" id="settingsStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost-btn danger" id="btnClearKey">清除 Key</button>
+      <button class="ghost-btn" id="btnTestKey">测试连接</button>
+      <button class="primary-btn" id="btnSaveSettings">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 面试设置弹窗 ================= -->
+<div class="modal hidden" id="weightsModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>🎛️ 抽题设置</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">拖动滑块调节各分类的抽题比例（会自动归一化到本轮题量）。</p>
+      <div id="weightSliders"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost-btn" id="btnResetWeights">恢复默认</button>
+      <button class="primary-btn" data-close-modal>完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 历史成绩弹窗 ================= -->
+<div class="modal hidden" id="historyModal">
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h2>📈 历史面试成绩</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body" id="historyBody"></div>
+  </div>
+</div>
+
+<!-- ================= 成员选择（首次进入 / 切换） ================= -->
+<div class="modal hidden" id="userSelectModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>👥 选择成员</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">每位成员有独立的学习进度、长期记忆、关注清单、简历与面试记录；机器环境是共用的（自动探测当前电脑）。</p>
+      <div id="userPickList"></div>
+      <div class="field" style="margin-top:16px">
+        <label>新建成员</label>
+        <div class="field row" style="margin-bottom:0">
+          <div><input type="text" id="newUserName" placeholder="名字或昵称，例如：小雨" /></div>
+          <div style="max-width:120px"><input type="text" id="newUserEmoji" placeholder="🙂" maxlength="4" /></div>
+          <div style="max-width:150px"><button class="primary-btn" id="btnCreateUser">创建并填写画像</button></div>
+        </div>
+      </div>
+      <div class="status-line" id="userStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost-btn" data-close-modal>先随便看看</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 首次画像问卷 ================= -->
+<div class="modal hidden" id="onboardingModal">
+  <div class="modal-card wide">
+    <div class="modal-head">
+      <h2 id="obTitle">📝 先认识一下你（首次进入的画像问卷）</h2>
+      <button class="icon-btn" id="btnObLater" title="稍后再填">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small" id="obHint">这些答案会写进你的长期记忆档案，之后答疑、热榜推荐、面试评分都会按你的情况来。可以随时在「长期记忆」页修改。</p>
+      <div id="obForm"></div>
+      <div class="status-line" id="obStatus"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="muted small" id="obProgress"></span>
+      <button class="ghost-btn" id="btnObSkip">跳过（之后可在长期记忆页补）</button>
+      <button class="primary-btn" id="btnObSave">保存画像</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="data/roadmap.data.js"></script>
+<script src="data/resume.data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/users.js"></script>
+<script src="js/roadmap.js"></script>
+<script src="js/resume.js"></script>
+<script src="js/interview.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/memory.js"></script>
+<script src="js/trending.js"></script>
+<script>window.App.boot();</script>
+</body>
+</html>

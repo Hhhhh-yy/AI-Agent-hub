@@ -1,0 +1,719 @@
+[
+  {
+    "id": "pe-001",
+    "category": "Python与工程基础",
+    "subcategory": "类型注解与数据校验",
+    "difficulty": 1,
+    "orgTypes": ["ai_startup", "soe", "university"],
+    "timeLimitSec": 120,
+    "question": "你接口里要接大模型返回的 JSON，经常字段缺失或者类型不对。我看你项目里用了 pydantic，说说类型注解在 Python 里到底起什么作用，pydantic 又是怎么把校验这件事兜住的？",
+    "answerPoints": [
+      "注解默认只存进 __annotations__，不做运行时校验",
+      "pydantic 在实例化时按注解校验并做有限类型转换",
+      "校验失败抛 ValidationError，错误带字段路径",
+      "用 Field 声明范围、长度约束，Optional 区分可选",
+      "输出用 model_dump / model_dump_json 序列化"
+    ],
+    "answerDetail": "类型注解默认不产生运行时行为，只是写进 __annotations__，真正拦错的是 mypy、Pyright 这类静态检查工具。\npydantic 的 BaseModel 会在实例化时读注解做运行时校验和有限类型转换，例如字符串 “12” 可以转成整数 12；\n校验失败抛 ValidationError，错误信息带字段路径，可以直接返回给调用方。\n用 Field(ge、le、max_length) 声明约束，Optional 或默认值区分必填与可选，模型嵌套模型可递归校验大模型的嵌套结构。\n常见错误是以为注解会自动拦错，以及把 v1 的 validator、.dict() 写法直接搬到 v2（应改用 field_validator、model_dump）。",
+    "followUps": [
+      "大模型偶尔返回 markdown 代码块包裹的 JSON，你在解析层怎么兜？",
+      "pydantic v2 相比 v1 在性能和写法上有什么变化？"
+    ],
+    "tags": ["pydantic", "type-hints", "validation"]
+  },
+  {
+    "id": "pe-002",
+    "category": "Python与工程基础",
+    "subcategory": "装饰器",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "uav_robot", "soe"],
+    "timeLimitSec": 180,
+    "question": "线上调第三方接口偶尔超时。让你写一个通用的重试装饰器，你打算怎么写？functools.wraps 是干嘛的，不加会出什么问题？",
+    "answerPoints": [
+      "装饰器本质是接收函数并返回包装函数（闭包）",
+      "wrapper 内 try 调用原函数，捕获指定异常后重试",
+      "必须加 functools.wraps 保留函数名、文档与签名",
+      "只对超时、连接类异常重试，业务异常直接抛",
+      "指数退避加随机抖动，并设最大重试次数",
+      "重试要求幂等，写操作盲目重试会产生脏数据"
+    ],
+    "answerDetail": "装饰器就是把函数当参数传进去，返回一个 wrapper，里面 try 调用原函数，捕获指定异常后 sleep 再试，超过次数抛出最后一次异常。\n不加 functools.wraps，被装饰函数的 __name__、__doc__、__annotations__ 都会变成 wrapper 的，日志、框架路由、文档工具都会认错。\n退避用 base 乘以 2 的 n 次方再加随机抖动，防止大量请求同时重试形成风暴。\n还要判断幂等性：创建订单这类 POST 重试可能产生重复数据，需要幂等键或干脆不重试。\n生产上更推荐 tenacity 这类成熟库，把 stop、wait、重试异常类型参数化；常见错误是裸 except 全捕获、无上限死循环重试、忘记 wraps。",
+    "followUps": [
+      "如果重试期间函数被并发调用，装饰器里如果有计数器要注意什么？",
+      "带参数的装饰器（比如 @retry(times=3)）代码结构怎么写？"
+    ],
+    "tags": ["decorator", "functools.wraps", "retry"]
+  },
+  {
+    "id": "pe-003",
+    "category": "Python与工程基础",
+    "subcategory": "生成器与迭代器",
+    "difficulty": 1,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 150,
+    "question": "有个几十 G 的日志文件要按行清洗并统计，直接 readlines 内存就爆了。Python 里你会怎么处理？yield 和 return 到底差在哪？",
+    "answerPoints": [
+      "用 for line in open(...) 逐行迭代，内存是常数级",
+      "yield 把函数变成生成器，惰性产出并保留局部状态",
+      "return 结束函数只返回一次，yield 可多次挂起恢复",
+      "生成器本身是迭代器，支持 for、next，可串成管道",
+      "生成器只能遍历一次，取完即耗尽"
+    ],
+    "answerDetail": "文件对象本身可迭代，for line in f 逐行读，内存占用跟文件大小无关；再套生成器函数做过滤、解析、聚合，每个环节 yield 出去，形成惰性管道，全程只驻留当前一条记录。\nyield 会把函数挂起并把值交给调用方，下次 next 从挂起处继续执行，局部变量全部保留；return 是直接结束函数。\n需要按批处理时可以用 itertools.islice 做分批，或用生成器消费方做计数聚合。\n常见错误是用 readlines() 或 list(reader) 把数据全物化，或者在生成器耗尽后再遍历拿到空结果——需要重复遍历就重新创建生成器或落成列表。",
+    "followUps": [
+      "生成器里如果抛异常，调用方感知得到吗？",
+      "yield from 和 send 分别解决什么问题？"
+    ],
+    "tags": ["generator", "yield", "iterator"]
+  },
+  {
+    "id": "pe-004",
+    "category": "Python与工程基础",
+    "subcategory": "并发与GIL",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "uav_robot", "soe"],
+    "timeLimitSec": 180,
+    "question": "Python 的多线程一直被人说是“假并发”，GIL 到底是个什么东西？如果现在有个任务，要同时下载 200 张图片、再对每张图做压缩，你会怎么分工？",
+    "answerPoints": [
+      "GIL 是 CPython 解释器级互斥锁，同时只有一个线程执行字节码",
+      "IO 阻塞和 sleep 时会释放 GIL，所以多线程对 IO 密集有效",
+      "CPU 密集受 GIL 限制，需要用多进程绕开",
+      "下载用线程池或 asyncio（aiohttp），压缩用进程池",
+      "多进程有 pickle 序列化和内存开销，传路径优于传大对象"
+    ],
+    "answerDetail": "GIL 保证同一进程内同一时刻只有一个线程执行 Python 字节码，但它会在 IO 阻塞、sleep 以及每 5 毫秒左右的检查点释放，所以网络下载这类 IO 密集任务用 ThreadPoolExecutor 或 aiohttp 都能真正重叠等待时间。\n图片压缩是纯 CPU 计算，线程开再多也是串行执行，应该交给 ProcessPoolExecutor，每个进程有独立解释器和自己的 GIL。\n实际管线可以拼两段：协程或线程池负责拉取，再把结果喂给进程池压缩，注意大 bytes 走 pickle 开销不小，宁可传文件路径。\n常见错误是全用多线程做计算、开上千个进程把内存和调度压垮、以及以为 GIL 会让所有多线程都无效。",
+    "followUps": [
+      "GIL 在 Python 3.13 之后的自由线程（no-GIL）版本里有什么变化？",
+      "你项目里无人机视频流解码，会怎么安排线程和进程？"
+    ],
+    "tags": ["GIL", "multiprocessing", "threadpool"]
+  },
+  {
+    "id": "pe-005",
+    "category": "Python与工程基础",
+    "subcategory": "对象模型与拷贝",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 150,
+    "question": "配置字典要按环境改一份，你直接 copy.copy 复制了一份，结果改新字典把原来的也带脏了。说说赋值、浅拷贝、深拷贝的区别，以及这种情况怎么排查？",
+    "answerPoints": [
+      "赋值只绑定同一对象引用，不产生新容器",
+      "浅拷贝新建外层容器，嵌套可变对象仍共享",
+      "深拷贝递归复制，用 copy.deepcopy 实现",
+      "不可变对象（int、str、tuple）拷贝返回原对象",
+      "排查用 id() 对比、is 判断是否同一对象"
+    ],
+    "answerDetail": "a = b 只是让两个名字指向同一个字典，改谁都一样。\ncopy.copy 只建一层新容器，里面的嵌套 list、dict 还是引用同一份，改嵌套字段就会互相污染；copy.deepcopy 会递归复制到不可变对象为止，代价更高，也可能复制不该复制的东西，比如文件句柄、锁。\n元组、字符串、整数不可变，浅拷深拷都返回原对象。\n工程上更推荐不可变配置：用 pydantic 的 model_copy(deep=True)，或者干脆不修改原配置，用叠加方式生成新配置。\n排查时打印 id() 或用 is 判断是不是同一对象，一看就清楚；常见错误是以为 copy 等于深拷、对含大对象的结构无脑 deepcopy 导致性能骤降。",
+    "followUps": [
+      "copy.deepcopy 遇到循环引用会死循环吗？Python 怎么处理的？",
+      "函数默认参数写成可变对象会有什么坑？"
+    ],
+    "tags": ["copy", "deepcopy", "mutable"]
+  },
+  {
+    "id": "pe-006",
+    "category": "Python与工程基础",
+    "subcategory": "异步",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "uav_robot"],
+    "timeLimitSec": 240,
+    "question": "你要写一个服务，一边收无人机的遥测数据，一边调大模型接口做实时分析。这个场景你会选多线程、多进程还是 asyncio？为什么？",
+    "answerPoints": [
+      "高并发 IO 密集选 asyncio，单线程事件循环切换开销小",
+      "CPU 密集（图像处理、控制解算）交给多进程",
+      "同步阻塞调用必须 run_in_executor，否则卡死事件循环",
+      "协程内 IO 全用异步库，不能混 requests、time.sleep",
+      "实时链路用 asyncio.Queue 加独立消费任务做背压"
+    ],
+    "answerDetail": "收遥测和调大模型本质上都是在等网络 IO，用 asyncio 能在单线程里挂起成千上万个连接，上下文切换代价比线程低，内存也更省。\n但一旦某个协程里调了 requests、time.sleep、pandas 重计算这类同步阻塞函数，整个事件循环就被卡住，所有协程一起停摆，必须用 loop.run_in_executor 丢到线程池，或者换成 aiohttp、asyncpg 这类异步库，每个 await 点都要真的交出控制权。\nCPU 重的图像处理、控制解算用多进程，通过队列或消息中间件和异步侧解耦。\n遥测这种不能丢数据的链路常用 asyncio.Queue 做缓冲，再加一个独立消费任务做背压和限流。常见错误是把协程写成同步、忘记 await、以及在协程里用阻塞锁。",
+    "followUps": [
+      "asyncio 任务里抛异常没人 await，会发生什么？",
+      "如果要给遥测数据做多消费者分发，你会用 Queue 还是广播机制？"
+    ],
+    "tags": ["asyncio", "GIL", "concurrency"]
+  },
+  {
+    "id": "pe-007",
+    "category": "Python与工程基础",
+    "subcategory": "异常处理",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 150,
+    "question": "我看你代码里有个 except: pass，我说这个不行。说说你在工程里一般怎么写异常处理，什么情况下该吞掉、什么情况下必须往上抛？",
+    "answerPoints": [
+      "禁止裸 except，也禁止 except Exception 后静默 pass",
+      "只捕获预期异常类型，其余让它往上冒",
+      "异常日志用 logger.exception 打完整堆栈",
+      "资源释放交给 finally 或 with，异常路径不能漏",
+      "自定义异常分层并携带错误码，便于上层分类处理"
+    ],
+    "answerDetail": "裸 except 会连 KeyboardInterrupt、SystemExit 一起吞掉，线上出问题毫无线索。\n正确做法是捕获具体类型，比如 ValueError、TimeoutError、RequestException；处理不了就 raise，或用 raise ... from e 保留调用链。\n异常日志用 logger.exception 打完整堆栈，只打一句“出错了”等于没打。\n资源释放交给 with 或 finally，避免异常路径漏关连接、漏解锁。\n业务上常见分层：底层抛原始异常，服务层包装成带错误码的自定义异常，接口层统一转响应并上报监控。\n可以吞掉的只有不影响主流程的清理动作，比如埋点上报失败；常见错误是用异常做流程控制、捕获后只打印导致重试静默失效。",
+    "followUps": [
+      "raise ... from e 和直接 raise 有什么区别？",
+      "自定义异常体系你会怎么分层？给个你项目里的例子。"
+    ],
+    "tags": ["exception", "logging", "error-handling"]
+  },
+  {
+    "id": "pe-008",
+    "category": "Python与工程基础",
+    "subcategory": "包管理与虚拟环境",
+    "difficulty": 1,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 150,
+    "question": "你项目依赖装了一堆，换台机器就跑不起来。你们的依赖是怎么管的？为什么非得用虚拟环境？",
+    "answerPoints": [
+      "一个项目一个虚拟环境，避免全局包版本互相污染",
+      "用 uv、poetry、pip-tools 生成带版本的 lock 文件",
+      "锁文件必须提交仓库，保证 CI 与线上版本一致",
+      "生产依赖与开发依赖（dev 组）分开声明",
+      "固定 Python 版本与镜像源，容器内保持一致"
+    ],
+    "answerDetail": "虚拟环境解决的是隔离问题：不同项目对同一个库的版本要求经常冲突，装到全局迟早打架，venv 或 conda 让每个项目有独立 site-packages。\n依赖管理不能只靠手写几个顶层包的 requirements.txt，要用 uv、poetry、pip-tools 从 pyproject.toml 解析完整依赖树，生成包含精确版本甚至哈希的 lock 文件，保证换机器和 CI 上装出来的版本完全一致，锁文件必须进仓库。\npytest、ruff 这类开发依赖和生产依赖分开声明，镜像里不装测试工具。\n常见错误是不锁版本、只 pin 顶层包导致传递依赖漂移、把 venv 目录提交进 Git、基础镜像用 latest 导致某天构建突然失败。",
+    "followUps": [
+      "如果 lock 文件和线上已装环境不一致，你怎么发现？",
+      "conda 和 pip 混用会有什么问题？"
+    ],
+    "tags": ["venv", "poetry", "dependency"]
+  },
+  {
+    "id": "pe-009",
+    "category": "Python与工程基础",
+    "subcategory": "日志与可观测性",
+    "difficulty": 2,
+    "orgTypes": ["soe", "uav_robot", "ai_startup"],
+    "timeLimitSec": 180,
+    "question": "生产上的大模型服务半夜出问题，第二天要靠日志定位。你们项目的日志是怎么打的？我看很多人只会 print，这有什么问题？",
+    "answerPoints": [
+      "用 logging 而不是 print，可分级、可配置、可重定向",
+      "生产输出结构化 JSON，带 trace_id、耗时、模型名",
+      "异常必须打堆栈，关键链路记录入参出参摘要",
+      "日志要脱敏，禁止打印 API Key 与用户原文隐私",
+      "设置级别与轮转，打太多会拖慢服务、写爆磁盘"
+    ],
+    "answerDetail": "print 直接写 stdout，没有级别、时间戳、模块名，线上无法按级别过滤和统一采集。\n标准做法是用 logging 配合 dictConfig，根 logger 设 INFO，第三方库压到 WARNING；生产输出 JSON 便于 ELK、Loki 解析。\n每条关键日志带 trace_id 把一次请求串起来，记录模型名、prompt 长度、首 token 延迟和总耗时，方便统计 P95，异常用 logger.exception 带堆栈。\n用户输入和 API Key 必须脱敏。用 RotatingFileHandler 或采集端做轮转，避免磁盘被打满。\n常见错误是 f-string 拼日志、循环里 print、调试日志忘了关导致 IO 打满、把敏感信息直接打进日志。",
+    "followUps": [
+      "trace_id 在异步任务和多进程之间怎么传递？",
+      "你会用哪些指标配合日志来判断服务是否健康？"
+    ],
+    "tags": ["logging", "observability", "trace-id"]
+  },
+  {
+    "id": "pe-010",
+    "category": "Python与工程基础",
+    "subcategory": "测试",
+    "difficulty": 2,
+    "orgTypes": ["soe", "university", "ai_startup"],
+    "timeLimitSec": 200,
+    "question": "你调大模型的代码依赖外部接口，输出还带随机性，单测怎么写？如果我说你这个函数根本没法测，你打算怎么改？",
+    "answerPoints": [
+      "把外部依赖抽象成接口，测试时注入 mock 或假实现",
+      "用 pytest fixture 管理 client、临时资源等公共依赖",
+      "用 monkeypatch 或 patch 打桩网络调用、固定随机种子",
+      "断言结构与关键字段，不硬比大模型整段输出",
+      "分层测试：打桩单测为主，真实调用放少量集成测试",
+      "必须覆盖超时、限流、返回格式非法等异常分支"
+    ],
+    "answerDetail": "不可测基本都是耦合造成的：函数内部直接 new 客户端、直接读全局配置、直接 sleep。\n改成依赖注入，把 HTTP 客户端、随机源、时钟作为参数传入，测试时换假实现或 MagicMock，就能断言调用次数、入参和异常分支。pytest 用 fixture 提供复用资源，monkeypatch 改环境变量和模块属性。\n对大模型输出不要断言整段文本，而是断言结构是否合法（能否被 pydantic 解析）、关键字段、以及重试和降级路径。\nCI 里跑打桩单测保证又快又稳，少量真实调用放到集成测试并加标记，按需执行。常见错误是只写 happy path、为了可测把业务逻辑塞满 if TEST 分支、以及用 sleep 等异步结果导致偶发失败。",
+    "followUps": [
+      "如果接口返回是流式的，你怎么写测试？",
+      "mock 太多导致测试跟实现绑死，你怎么权衡？"
+    ],
+    "tags": ["pytest", "mock", "unit-test"]
+  },
+  {
+    "id": "pe-011",
+    "category": "Python与工程基础",
+    "subcategory": "工程可靠性",
+    "difficulty": 3,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 240,
+    "question": "我们这套系统是给客户长期跑的，最怕半夜挂。你之前做的吊挂无人机项目里，是怎么保证代码长期跑不出问题的？说说你实际用过的可靠性手段。",
+    "answerPoints": [
+      "关键路径做输入校验与边界检查，异常值提前拦截",
+      "用类型注解加 mypy、ruff，并在 CI 上卡住合并",
+      "心跳与看门狗，进程假死能被检测并自动重启",
+      "异常兜底与降级，最坏情况进安全状态而不是崩溃",
+      "关键状态落盘或可重放，重启后能恢复一致",
+      "日志、指标、告警打通，出问题有人第一时间知道"
+    ],
+    "answerDetail": "长期无人值守的系统靠的是机制，不是个人小心。\n代码层用类型注解配合 mypy、ruff 在 CI 上拦截低级错误，核心函数写单测覆盖异常输入和边界值。\n运行层做分级兜底：捕获异常后重试或降级到保守策略，比如吊挂任务里通信中断就让飞机悬停或返航，而不是抛异常直接退出；每条通信、每次 IO 都要有超时，避免线程永久阻塞。\n进程加心跳，外部看门狗或 systemd、supervisor 检测到假死就重启，关键状态写本地文件或 Redis，保证重启后能恢复一致。\n再打通日志、指标和告警，让错误率、延迟异常能被及时看到。常见错误是只做 try/except 不做降级、忽略重启后的状态一致性、告警缺失只能等客户投诉。",
+    "followUps": [
+      "心跳检测的间隔和误判你怎么定？",
+      "如果重启后无人机状态未知，你的恢复流程是什么？"
+    ],
+    "tags": ["reliability", "watchdog", "mypy"]
+  },
+  {
+    "id": "cs-001",
+    "category": "计算机基础",
+    "subcategory": "HTTP与HTTPS",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 180,
+    "question": "你调大模型 API 走的都是 HTTPS。说说 HTTPS 相比 HTTP 到底多做了什么？中间人为什么偷不到内容？",
+    "answerPoints": [
+      "HTTPS 等于 HTTP 加 TLS，默认走 443 端口",
+      "握手阶段用非对称加密协商出对称会话密钥",
+      "客户端校验证书链、签名、域名与有效期",
+      "数据传输用对称加密加 MAC，兼顾性能与完整性",
+      "生产代码禁止 verify=False 关闭证书校验"
+    ],
+    "answerDetail": "HTTP 明文传输，路径、Header、Body 都能被中间节点看到和篡改。\nHTTPS 在 TCP 之上加了 TLS：握手时客户端校验证书链是否由可信 CA 签发、域名是否匹配、是否过期，然后通过证书公钥加密预主密钥或走 ECDHE 协商，双方各自算出对称会话密钥，之后应用数据用 AES-GCM 这类对称算法加密并附带完整性校验，性能和安全性兼顾。\n所以中间人拿不到密钥就解不开，篡改也会被 MAC 校验发现。\n工程上要注意别为省事关掉证书校验、别把证书写死到过期、内网服务同样应该走 TLS 或 mTLS。常见错误是以为 HTTPS 全程非对称加密、以为有了 HTTPS 就不用做鉴权和参数校验。",
+    "followUps": [
+      "公司内网代理做 HTTPS 解密是怎么实现的？",
+      "TLS 1.3 相比 1.2 在握手上省了什么？"
+    ],
+    "tags": ["https", "tls", "certificate"]
+  },
+  {
+    "id": "cs-002",
+    "category": "计算机基础",
+    "subcategory": "SSE流式",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup"],
+    "timeLimitSec": 200,
+    "question": "我们大模型产品的回答是逐字蹦出来的，前端用 EventSource 接。说说这个流式返回在协议层是怎么实现的？跟 WebSocket 比，什么时候用哪个？",
+    "answerPoints": [
+      "SSE 是 HTTP 长连接，响应类型为事件流格式",
+      "服务端按 data 加两个换行的格式持续推送且不关连接",
+      "SSE 是服务端到客户端单向，浏览器断线会自动重连",
+      "WebSocket 是全双工，适合双向实时交互",
+      "要关掉 Nginx 缓冲（proxy_buffering）并加心跳防超时",
+      "客户端必须能处理截断的半截 JSON 与重连去重"
+    ],
+    "answerDetail": "SSE 本质是一个不结束的 HTTP 响应：响应头 Content-Type 为 text/event-stream，服务端每产出一段就写 data 加两个换行并 flush，浏览器 EventSource 收到触发 onmessage，默认断线自动重连，还能带 Last-Event-ID 续传，比 WebSocket 简单且更容易穿过代理。\n它是单向的，客户端要发消息得另开请求，所以大模型逐 token 输出这种服务端单向推送非常合适。\n实践中常被 Nginx 缓冲或网关超时坑住，要关 proxy_buffering 并定期发注释行做心跳。\nWebSocket 适合语音对话、协同编辑这类双向实时场景。常见错误是处理不了半截 JSON、没有结束标记、重连后重复输出已展示的内容。",
+    "followUps": [
+      "如果网关不支持长连接，你还有什么兜底方案？",
+      "流式接口怎么做超时和计费统计？"
+    ],
+    "tags": ["sse", "streaming", "llm"]
+  },
+  {
+    "id": "cs-003",
+    "category": "计算机基础",
+    "subcategory": "TCP",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 180,
+    "question": "你说你了解网络。那 TCP 建立连接为什么要三次握手、断开却要四次？还有服务器上一堆 TIME_WAIT 连接，这算问题吗？",
+    "answerPoints": [
+      "三次握手确认双方收发能力并同步初始序号",
+      "两次握手无法让服务端确认客户端收到了自己的 SYN",
+      "四次挥手因为 TCP 半关闭，对方可能还有数据要发",
+      "TIME_WAIT 在主动关闭方等 2MSL，让旧报文消散",
+      "CLOSE_WAIT 堆积通常是程序没正确关闭连接"
+    ],
+    "answerDetail": "三次握手是为了双方都能确认“我能发、你能收”：客户端发 SYN，服务端回 SYN 加 ACK，客户端再 ACK，第三次让服务端确认客户端收到了自己的 SYN，同时同步初始序号避免旧连接的报文串进来。\n断开时一方发 FIN 只表示自己不再发数据，对方可能还有数据要发，所以 ACK 和 FIN 分开发，共四次。\n主动关闭方进入 TIME_WAIT 等 2MSL，保证最后那个 ACK 丢失时对方重发的 FIN 还能被响应，也让本次连接的残余报文在网络中自然消失。\n高并发短连接下 TIME_WAIT 会堆积占端口，可开 tcp_tw_reuse、改用连接池或长连接缓解。常见错误是把 TIME_WAIT 和 CLOSE_WAIT 搞混——CLOSE_WAIT 大量存在一般是代码忘了 close。",
+    "followUps": [
+      "SYN Flood 攻击是怎么回事，怎么防？",
+      "如果客户端频繁建连导致端口耗尽，你怎么改架构？"
+    ],
+    "tags": ["tcp", "handshake", "time-wait"]
+  },
+  {
+    "id": "cs-004",
+    "category": "计算机基础",
+    "subcategory": "TCP与UDP",
+    "difficulty": 2,
+    "orgTypes": ["uav_robot", "soe"],
+    "timeLimitSec": 200,
+    "question": "无人机地面站的遥测数据，你会走 TCP 还是 UDP？如果传输中一帧姿态数据被拆成两半收到了，接收端你打算怎么处理？",
+    "answerPoints": [
+      "高频可容忍丢包的遥测走 UDP，控制指令要可靠走 TCP",
+      "TCP 是无边界字节流，UDP 保留报文边界但会丢包乱序",
+      "应用层自定义帧协议：魔数加长度字段加校验码",
+      "接收端维护缓冲区做拆包粘包重组，不够就继续等",
+      "加序号和时间戳，乱序丢包时判断丢弃或插值补偿"
+    ],
+    "answerDetail": "TCP 提供的是无边界字节流，发送端两次 write 可能被合并成一次读到（粘包），也可能一帧被拆到多个包里（拆包），这是流式语义而不是 bug，所以应用层必须定义自己的帧格式。\n常见做法是固定魔数开头，加长度字段和 CRC 校验，接收端把字节累积到缓冲区，循环判断帧头是否完整、长度是否够，不够就保留等待下一批数据，超时或校验失败则丢弃并重新同步帧头。\nUDP 保留报文边界不会有粘包问题，但会丢包乱序，适合高频姿态遥测这类丢了也能接受的场景；关键控制指令用 TCP 或加确认重传。\n两类数据最好分通道传输，控制链路额外做超时检测和失效保护，比如心跳丢失就悬停或返航。常见错误是假设一次 recv 就是一条完整消息。",
+    "followUps": [
+      "如果 UDP 丢包严重，除了换 TCP 你还可能做什么？",
+      "多机协同场景下时间戳不同步会带来什么问题？"
+    ],
+    "tags": ["tcp", "udp", "protocol-framing", "telemetry"]
+  },
+  {
+    "id": "cs-005",
+    "category": "计算机基础",
+    "subcategory": "数据库索引",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 200,
+    "question": "表里有几百万行日志，你按 user_id 加时间范围查很慢。索引你会怎么加？为什么有时候加了索引反而更慢？",
+    "answerPoints": [
+      "InnoDB 索引用 B+ 树，叶子节点存数据行或主键值",
+      "联合索引遵循最左前缀，范围条件会截断后面的列",
+      "二级索引查非索引列要回表，聚簇索引直接带数据",
+      "对列做函数运算、隐式类型转换会让索引失效",
+      "写多读少的表索引拖慢写入并占空间，应按查询建",
+      "用 explain 看 type、key、rows 验证是否命中"
+    ],
+    "answerDetail": "InnoDB 表本身按主键组织成聚簇索引，二级索引叶子存索引列加主键值，查非索引列需要回表。\n按你说的查询可以建 (user_id, created_at) 联合索引，user_id 等值匹配加 created_at 范围正好吃满最左前缀；如果把时间放前面，只按 user_id 查就用不上。\n索引失效常见于：where 里对列做函数运算、字符串列传数字触发隐式转换、前导模糊 like '%x'、OR 连接非索引列。\n另外每个索引都要在写入时维护，索引太多会拖慢 insert、update 并占磁盘，应按实际慢查询来加。\n用 explain 看 type、key 是否命中再决定。常见错误是给每个字段单独建索引、以为有索引就一定变快、不看执行计划凭感觉调。",
+    "followUps": [
+      "覆盖索引是什么，怎么能避免回表？",
+      "如果查询条件经常变，你会怎么设计索引策略？"
+    ],
+    "tags": ["mysql", "index", "b-plus-tree", "explain"]
+  },
+  {
+    "id": "cs-006",
+    "category": "计算机基础",
+    "subcategory": "事务与隔离级别",
+    "difficulty": 3,
+    "orgTypes": ["soe", "ai_startup"],
+    "timeLimitSec": 240,
+    "question": "两个请求同时给同一条订单扣库存，结果超卖了。数据库的隔离级别是怎么影响这件事的？你打算怎么改代码？",
+    "answerPoints": [
+      "四种隔离级别：读未提交、读已提交、可重复读、串行化",
+      "MySQL 默认可重复读，普通查询走 MVCC 快照读不加锁",
+      "快照读可能读到旧库存，防超卖必须用当前读加锁",
+      "改法：update 带 where 库存大于 0 并判断影响行数",
+      "或用 select for update、版本号乐观锁、Redis 原子扣减"
+    ],
+    "answerDetail": "隔离级别解决并发读写的可见性：读未提交会脏读，读已提交防脏读但可能不可重复读，可重复读（MySQL 默认）用 MVCC 让事务读到一致快照，串行化最安全但并发最差。\n快照读不加锁，所以“先查库存再 update”的写法两个事务都读到 10，各减到 9 就超卖了；要防住必须用当前读：update 时带 where num > 0，再按影响行数判断是否成功，原子性交给数据库。\n也可以 select ... for update 加悲观锁，或用版本号乐观锁失败重试，Redis 场景用 Lua 保证判断与扣减原子。\n唯一键冲突主要靠唯一索引而非间隙锁。常见错误是只在应用层加锁（多实例无效）、以为可重复读能防住所有并发写。",
+    "followUps": [
+      "MVCC 里的 undo log 和 Read View 大概是怎么工作的？",
+      "如果库存放在 Redis，宕机丢数据你怎么办？"
+    ],
+    "tags": ["transaction", "isolation-level", "mvcc", "oversell"]
+  },
+  {
+    "id": "cs-007",
+    "category": "计算机基础",
+    "subcategory": "Redis缓存",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 200,
+    "question": "我们接口前面挂了 Redis 做缓存。上线后某些时刻数据库压力突然飙升，甚至被人刷挂过。你知道几种典型的缓存问题？分别怎么防？",
+    "answerPoints": [
+      "穿透：查不存在的数据，用空值缓存或布隆过滤器",
+      "击穿：热点 key 过期瞬间被打穿，用互斥锁或逻辑过期",
+      "雪崩：大批 key 同时失效，给 TTL 加随机抖动",
+      "热点 key 可用本地缓存做多级缓存分担",
+      "一致性：先更新库再删缓存，或延迟双删，别先删缓存"
+    ],
+    "answerDetail": "穿透是查一个数据库里也没有的 key，缓存永远不命中，请求全打到库上，常见于被恶意刷；解法是缓存空值并设短 TTL，或用布隆过滤器在入口挡掉不存在的 key，但要接受它的误判特性。\n击穿是某个热点 key 刚好过期，大量并发同时回源，用互斥锁让一个请求去加载、其余短暂等待，或者干脆逻辑过期、不删 key 只异步刷新。\n雪崩是大量 key 在同一时刻失效或 Redis 整体不可用，给 TTL 加随机抖动、做集群和限流降级、必要时本地缓存兜底。\n一致性上常见做法是先更新数据库再删缓存，或延迟双删，不要先删缓存再写库。常见错误是缓存不设过期时间、误删大 key 阻塞 Redis、把 Redis 当成唯一数据源。",
+    "followUps": [
+      "布隆过滤器为什么会有误判，怎么降低误判率？",
+      "Redis 内存满了，你的淘汰策略怎么选？"
+    ],
+    "tags": ["redis", "cache", "bloom-filter"]
+  },
+  {
+    "id": "cs-008",
+    "category": "计算机基础",
+    "subcategory": "操作系统进程与内存",
+    "difficulty": 2,
+    "orgTypes": ["soe", "university", "uav_robot"],
+    "timeLimitSec": 200,
+    "question": "进程和线程到底差在哪？Python 里又冒出个协程。从操作系统角度看，它们的切换开销和内存布局分别是什么样？",
+    "answerPoints": [
+      "进程是资源分配单位，有独立地址空间与页表",
+      "线程是调度单位，共享进程的堆和全局数据，各有栈",
+      "线程切换只换寄存器和栈，进程切换要换页表致 TLB 失效",
+      "协程由用户态事件循环调度，切换成本最低但无抢占",
+      "共享堆意味着必须用锁或队列保护临界区"
+    ],
+    "answerDetail": "进程是资源分配单位，各自有独立虚拟地址空间、页表、文件描述符表，进程间通信要走管道、共享内存或 socket；线程是调度单位，同一进程内的线程共享代码段、堆和全局变量，只有栈和寄存器上下文是私有的。\n切换线程只需保存恢复寄存器和栈指针，进程切换还要换页表导致 TLB 失效，开销大一个量级，所以线程更适合频繁切换的高并发。\n协程完全在用户态由事件循环调度，不进内核，切换就是改一下函数状态，成本最低，但它没有抢占，一个协程阻塞整个循环都停。\n共享堆就意味着多线程改全局字典、缓存时必须用锁或线程安全队列保护临界区，线程局部变量可以避免共享。常见错误是以为线程有独立内存、在多线程里随便改共享可变对象。",
+    "followUps": [
+      "线程栈溢出一般是怎么触发的？",
+      "什么是写时复制，fork 之后内存是怎么算的？"
+    ],
+    "tags": ["os", "process-thread", "coroutine", "memory-layout"]
+  },
+  {
+    "id": "cs-009",
+    "category": "计算机基础",
+    "subcategory": "内存问题排查",
+    "difficulty": 3,
+    "orgTypes": ["uav_robot", "soe"],
+    "timeLimitSec": 240,
+    "question": "服务跑了两天内存一路涨，最后被 OOM Killer 干掉了。你会怎么定位？另外无人机机载端内存很紧张，你又会怎么设计？",
+    "answerPoints": [
+      "先看监控曲线与进程 RSS，区分泄漏还是缓存膨胀",
+      "用 tracemalloc 或 objgraph 对比快照找增长对象",
+      "常见元凶：无上限全局缓存、监听未注销、闭包持有引用",
+      "机载端预设内存预算，用固定容量缓冲与对象池复用",
+      "加内存水位指标与告警，超限时降采样或丢帧而非崩溃",
+      "查 dmesg 和容器 limit 确认是被谁杀的"
+    ],
+    "answerDetail": "第一步确认性质：内存阶梯式上升且不回落多半是泄漏；长期平稳在高位则是缓存或批处理大小的问题。\nPython 端用 tracemalloc 在两个时间点取快照做 diff，或用 objgraph 看增长最快的对象类型，再顺引用链找持有者；同时用 dmesg 和容器内存上限确认确实是 OOM。\n常见原因是全局 dict 缓存永不清理、异常对象被留住、回调或信号槽没注销、C 扩展没释放。\n机载场景更强调确定性：给图像和数组缓冲固定容量、用环形缓冲和对象池复用，避免运行时反复分配，把内存水位做成指标，超阈值时降采样、丢帧或切安全模式。常见错误是只看容器内存不看进程 RSS、以为 gc.collect() 能解决一切、以及不设上限的日志缓存。",
+    "followUps": [
+      "Python 的循环引用和 gc 分代回收大概怎么工作？",
+      "如果泄漏在第三方 C 扩展里，你怎么办？"
+    ],
+    "tags": ["memory-leak", "oom", "tracemalloc", "embedded"]
+  },
+  {
+    "id": "cs-010",
+    "category": "计算机基础",
+    "subcategory": "Linux线上排查",
+    "difficulty": 1,
+    "orgTypes": ["soe", "ai_startup"],
+    "timeLimitSec": 200,
+    "question": "假设你现在 SSH 上一台生产机器，用户反馈接口特别慢。你手上有哪些命令，按什么顺序查？",
+    "answerPoints": [
+      "uptime 与 top 看负载、CPU 占用和异常进程",
+      "free -h 看内存与 swap，iostat、vmstat 看磁盘 IO",
+      "ss -s、ss -tnp 看连接总数与端口占用，排查连接泄漏",
+      "翻应用日志和 dmesg 找 OOM、报错、重启记录",
+      "结合监控历史定位开始时间，定位后再动手别乱重启"
+    ],
+    "answerDetail": "一般按资源分层排查。\n先用 uptime 看负载是否超过核数，top 或 htop 看 CPU 被谁吃掉；load 很高但 CPU 很闲，说明进程在等 IO 或锁。\n接着 free -h 看内存和 swap，用 iostat -x、vmstat 看磁盘 util 和 await 是否异常。\n网络层用 ss -s 看连接总数，ss -tnp 看哪个进程占了很多连接，排查连接泄漏；必要时用 pidstat、py-spy dump 看 Python 栈。\n然后翻应用日志和 dmesg 找 OOM、段错误、重启痕迹，并对照监控历史确认问题是从哪个时间点开始的。改之前先留现场，别一上来就重启把证据清掉。常见错误是只看 CPU 不看 IO 和连接数、不做时间对比、直接重启。",
+    "followUps": [
+      "load average 高但 CPU 使用率低，可能是哪些原因？",
+      "怎么确认是应用慢还是数据库慢？"
+    ],
+    "tags": ["linux", "troubleshooting", "performance"]
+  },
+  {
+    "id": "cs-011",
+    "category": "计算机基础",
+    "subcategory": "Docker镜像分层",
+    "difficulty": 3,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 220,
+    "question": "你们的服务打包成 Docker 镜像，改一行代码重新构建都要好几分钟。说说镜像分层是怎么回事，你怎么把构建速度和镜像体积一起优化下来？",
+    "answerPoints": [
+      "镜像由多个只读层叠加，容器最上面是可写层",
+      "Dockerfile 每条指令生成一层并参与构建缓存",
+      "先 COPY 依赖清单装依赖，再 COPY 源码以命中缓存",
+      "多阶段构建把编译工具链留在构建阶段",
+      "基础镜像用 slim，合并 RUN，装完清理缓存",
+      "用 .dockerignore 排除 .git、测试数据和日志"
+    ],
+    "answerDetail": "镜像是一层层只读层叠加，配合联合文件系统让容器看到完整的文件树，容器运行时再在最上面加一个可写层，写文件走写时复制。\n构建缓存按指令顺序逐层比对，某层内容一变，后面所有层全部失效。所以最常见的优化是先把 requirements.txt 拷进去装依赖，再拷源码，这样改代码不会触发重装依赖。\n体积上用 python:3.x-slim 或多阶段构建：builder 阶段装 gcc 编 wheel，运行阶段只拷虚拟环境；合并 RUN 指令并用 --no-cache-dir 清理 pip 缓存，再用 .dockerignore 排除 .git、测试数据和日志。\n常见错误是把 COPY . . 放最前面、基础镜像用 latest、把密钥烤进镜像层（层里删掉也能被翻出来）。",
+    "followUps": [
+      "如果依赖是私有的，构建时怎么安全地传凭据？",
+      "镜像层里的密钥怎么彻底清除？"
+    ],
+    "tags": ["docker", "image-layer", "multi-stage-build"]
+  },
+  {
+    "id": "cs-012",
+    "category": "计算机基础",
+    "subcategory": "Docker网络",
+    "difficulty": 3,
+    "orgTypes": ["uav_robot", "soe", "ai_startup"],
+    "timeLimitSec": 220,
+    "question": "我们有几个容器：一个跑推理服务、一个跑 Redis、一个跑仿真环境。它们之间怎么互相访问？容器里的服务想让宿主机访问，网络这块你怎么配？",
+    "answerPoints": [
+      "默认 bridge 网络下容器有独立 IP，但重启后 IP 会变",
+      "自定义 bridge 自带 DNS，可直接用服务名访问",
+      "要暴露给外部必须做端口映射 -p 宿主端口:容器端口",
+      "host 模式共享宿主网络，延迟低但端口容易冲突",
+      "容器内 localhost 指自己，连宿主机要用宿主地址"
+    ],
+    "answerDetail": "Docker 默认给容器建 bridge 网络，容器各有私有 IP，同网段能互通，但 IP 重启后会变，所以别在配置里硬编码。\n推荐用 compose 或 docker network create 建自定义 bridge，它自带 DNS，可直接用服务名当主机名，比如 redis:6379。\n要让外部访问容器必须做端口映射 -p 8080:8000，只映射必要端口，数据库和调试端口别暴露到公网。\n对延迟敏感的 ROS、仿真类服务可用 host 网络或配置组播支持，否则节点发现会因跨网段组播不通而失败。\n容器内的 localhost 指容器自身，连宿主机要用 host.docker.internal。常见错误是容器里写 127.0.0.1 连别的容器、忘映射端口、把容器 IP 写进配置。",
+    "followUps": [
+      "容器里 ROS 多机通信不通，你会从哪几个点查？",
+      "怎么限制容器能用多少 CPU 和内存？"
+    ],
+    "tags": ["docker", "network", "ros", "compose"]
+  },
+  {
+    "id": "cs-013",
+    "category": "计算机基础",
+    "subcategory": "Git协作",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 150,
+    "question": "你和同事改到了同一个文件，push 的时候提示冲突了。Git 冲突你是怎么处理的？团队的分支模型你们一般怎么定？",
+    "answerPoints": [
+      "冲突源于同一文件同一区域被双方修改，无法自动合并",
+      "流程：拉取更新、编辑冲突标记、git add、继续合并",
+      "用 git status、git diff 确认冲突文件与双方改动意图",
+      "解决前先看对方 commit，不能一律选 ours",
+      "分支模型：主干加短生命周期功能分支，PR 评审后合并",
+      "公共分支禁止 force push，合并后跑测试再推"
+    ],
+    "answerDetail": "冲突不是 Git 出错，而是两边改了同一行，机器无法判断谁对，文件里会出现冲突标记，需要人工决定保留哪边或改成两者结合。\n流程是先把远端更新拉下来（merge 或 pull --rebase），git status 看冲突文件，逐个编辑删掉标记，git add 标记已解决，再 git commit 或 git rebase --continue。\n解决前务必看 git log、git diff 弄清对方意图，不能一律选自己的版本，否则会删掉别人的功能。\n团队一般用主干加短生命周期功能分支，走 PR、MR 评审再合并，改完跑测试；公共分支禁止 force push，rebase 只用于本地未推送的分支。常见错误是把 .env 和密钥推上去、冲突没解决就提交、长期不合并导致分支差异越滚越大。",
+    "followUps": [
+      "rebase 和 merge 在历史记录上有什么区别，什么时候用哪个？",
+      "如果误提交了密钥，你怎么处理？"
+    ],
+    "tags": ["git", "merge-conflict", "branching"]
+  },
+  {
+    "id": "al-001",
+    "category": "算法与数据结构",
+    "subcategory": "数组与哈希",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 300,
+    "question": "现在有两个各 50G 的日志文件 A 和 B，都含 IP 字段，机器只有 8G 内存。口述一下怎么把两边都出现过的 IP 找出来，说清数据结构和复杂度。",
+    "answerPoints": [
+      "不能全量载入，用哈希分桶把大文件切成小文件",
+      "按 hash(ip) 对 N 取模，同值必然落在同编号桶",
+      "只需对编号相同的两个小文件求交集",
+      "内存约等于单个桶大小，靠调大 N 装进内存",
+      "桶内可用 set 求交或各自排序后双指针归并",
+      "只判存在时可用布隆过滤器，但有误判"
+    ],
+    "answerDetail": "核心是分治加哈希：把 A、B 各扫一遍，按 hash(ip) 对 N 取模，分别写成 A_0 到 A_N-1、B_0 到 B_N-1，同一个 IP 一定落在编号相同的桶里，所以只需要对每一对同编号的小文件求交集。\n单个桶只有 50G 除以 N，取足够大的 N 就能装进 8G 内存。\n桶内求交可以直接读成 set，也可以各自排序后用双指针归并，后者内存更省、适合更大的桶。整体是两遍扫描加一轮读写，时间约 O(总行数)，额外内存约 O(总行数除以 N)。\n如果只判断某个值是否可能出现、允许小概率误判，可以用布隆过滤器或位图进一步压缩空间。常见错误是直接 readlines 或想着全量导数据库，完全没提分片和内存约束。",
+    "followUps": [
+      "如果 N 取太小导致某个桶还是装不下，你怎么处理？",
+      "如果要求精确统计出现次数而不是是否存在，方案怎么变？"
+    ],
+    "tags": ["hash", "divide-and-conquer", "big-file"]
+  },
+  {
+    "id": "al-002",
+    "category": "算法与数据结构",
+    "subcategory": "双指针与滑动窗口",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "soe"],
+    "timeLimitSec": 300,
+    "question": "给你一个字符串，口述并手写找出其中不含重复字符的最长子串长度。写完再说说你会怎么验证这个函数是对的。",
+    "answerPoints": [
+      "滑动窗口加哈希表记录字符最近出现的下标",
+      "右指针扩张，遇重复则左指针跳到上次位置加一",
+      "左指针更新要取 max，保证窗口只右移不回退",
+      "答案是 right 减 left 加一的历史最大值",
+      "时间 O(n)，空间 O(字符集大小)",
+      "用暴力版本对拍并覆盖空串、全重复等边界"
+    ],
+    "answerDetail": "用左右指针维护一个无重复的窗口，另用字典存每个字符最近一次出现的下标。\n右指针逐个右移，如果当前字符已经落在窗口内，就把左指针更新为 max(left, 上次位置加一)，用 max 是为了防止左指针回退；每轮用 right 减 left 加一刷新最大值。\n要能说清为什么整体是 O(n)：虽然看起来有回跳逻辑，但左指针总共只右移 n 次，两个指针加起来是两倍扫描，不是嵌套循环。空间取决于字符集大小。\n验证上写一个暴力双重循环版本做对拍，随机生成小字符串比对结果，再手工覆盖空串、单字符、全部相同、全部不同这些边界。常见错误是左指针直接赋值不取 max 导致窗口失效、把时间复杂度算成 O(n²)、边界返回 1 写成 0。",
+    "followUps": [
+      "如果允许最多替换 k 个字符，思路怎么改？",
+      "字符集是 Unicode 时，空间复杂度怎么说？"
+    ],
+    "tags": ["sliding-window", "two-pointers", "string"]
+  },
+  {
+    "id": "al-003",
+    "category": "算法与数据结构",
+    "subcategory": "二叉树遍历",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 240,
+    "question": "有个接口返回的 JSON 是树形结构，我要按层级打印所有节点。口述层序遍历怎么写，再手写一个非递归的中序遍历。",
+    "answerPoints": [
+      "层序遍历用队列，出队一个就把左右孩子入队",
+      "每轮先记录队列长度，就是当前层的节点数",
+      "非递归中序用栈，先一路压左孩子到底再弹出访问",
+      "弹出访问后转向右孩子，继续压右子树的左链",
+      "空树要单独处理，注意入队前判断孩子是否为空"
+    ],
+    "answerDetail": "层序遍历用 collections.deque，根节点先入队，循环里取出队首处理，再把非空的左右孩子依次入队；如果要按层分组输出，每轮先取一次 len(queue)，循环这么多次就是一层，天然得到分层结果，这也是 BFS 求最短层级的用法。\n非递归中序遍历用一个栈：当前节点不为空就一路入栈并往左走，为空就弹栈访问，然后转向它的右孩子继续，循环条件是栈非空或者当前节点非空。\n递归版代码简单，但树很深时会栈溢出，工程里对深度不确定的树用显式栈更稳。常见错误是用 list 做队列调 pop(0) 导致退化到 O(n²)、中序遍历里忘记转向右孩子导致死循环、以及空树没处理直接取 root 属性报错。",
+    "followUps": [
+      "如果树有几百万节点，递归深度会有什么问题？",
+      "怎么判断一棵树是不是平衡的？"
+    ],
+    "tags": ["tree", "bfs", "inorder", "stack"]
+  },
+  {
+    "id": "al-004",
+    "category": "算法与数据结构",
+    "subcategory": "堆与TopK",
+    "difficulty": 2,
+    "orgTypes": ["ai_startup", "uav_robot"],
+    "timeLimitSec": 260,
+    "question": "现在有一千万条请求日志，要实时算出耗时最长的前 10 个。全排序太慢，你会用什么结构？无人机里对传感器数据取最近极值也能这么干吗？",
+    "answerPoints": [
+      "维护大小为 K 的最小堆，堆顶即当前第 K 大的元素",
+      "新元素比堆顶大就替换堆顶并下沉，否则直接丢弃",
+      "时间 O(n log k)，空间 O(k)，优于全排序",
+      "Python 直接用 heapq.nlargest 或 heappushpop",
+      "K 极小时可直接用变量比较，不必上堆"
+    ],
+    "answerDetail": "求最大的 K 个用最小堆：堆里只保留当前最大的 K 个元素，堆顶是这批里最小的那个。\n来一个新元素先与堆顶比较，比堆顶小直接丢，比堆顶大就弹出堆顶压入新值并调整堆，单次 O(log k)，整体 O(n log k)，空间只有 O(k)，比 O(n log n) 全排序省很多，数据流不可回退时尤其合适。\nPython 里直接用 heapq.nlargest，容量固定时用 heappushpop 更省。\n无人机里对滑动窗口取极值、按优先级调度任务都可以用堆；但如果只要 1 个最大值这种 K 等于 1 的场景，直接变量比较更快，实时控制回路里堆的动态分配也不划算。常见错误是维护最大堆去求最大 K 个（方向反了）、每来一条就全排序、以及堆里塞进全量数据。",
+    "followUps": [
+      "如果要统计延迟的 P99 而不是 TopK，你用什么结构？",
+      "滑动窗口内的最大值有什么更优的做法？"
+    ],
+    "tags": ["heap", "topk", "streaming"]
+  },
+  {
+    "id": "al-005",
+    "category": "算法与数据结构",
+    "subcategory": "广度优先搜索",
+    "difficulty": 1,
+    "orgTypes": ["uav_robot", "university"],
+    "timeLimitSec": 240,
+    "question": "无人机要在栅格地图上从起点飞到终点，中间有障碍物。口述一个能找到最短路径的算法，为什么它能保证最短？",
+    "answerPoints": [
+      "把栅格看成无权图，相邻可通行格之间有边",
+      "从起点做 BFS，队列配合 visited 去重",
+      "按层扩展，首次到达终点时的路径就是最短",
+      "用 parent 指针回溯出完整路径",
+      "八连通不再等代价，需要 Dijkstra 或 A*",
+      "注意边界判断与障碍标记，避免越界"
+    ],
+    "answerDetail": "栅格地图可以看成一个无权图，每个可通行格子是一个节点，上下左右能走的邻居就是边。\nBFS 从起点入队，每次弹出队首，把未访问过的邻居入队并标记 visited，同时记录每个格子的父节点；因为 BFS 是按步数一层层扩展的，第一次到达终点时的层数就是最少步数，顺着 parent 回溯就是最短路径。\n复杂度是 O(节点数加边数)，也就是宽乘高的量级。\n如果允许斜着走，各方向代价不再相等，八连通就不能直接用 BFS，得换 Dijkstra；实际工程更常用 A*，加一个到终点的启发式函数，在保证最优的前提下大幅减少扩展节点。常见错误是不做 visited 导致死循环或状态爆炸、用 DFS 去找最短路、以及把八连通当等代价处理。",
+    "followUps": [
+      "A* 的启发函数要满足什么条件才能保证最优？",
+      "动态障碍出现时，你会怎么处理已经规划的路径？"
+    ],
+    "tags": ["bfs", "grid", "path-planning", "astar"]
+  },
+  {
+    "id": "al-006",
+    "category": "算法与数据结构",
+    "subcategory": "动态规划",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 260,
+    "question": "口述一道你印象最深的动态规划题，讲清状态是什么、转移方程怎么来的。再说说你怎么判断一个问题该不该用 DP。",
+    "answerPoints": [
+      "DP 适用条件：最优子结构加重叠子问题",
+      "先定义状态含义，再写转移方程、初始条件与边界",
+      "例：最小路径和 dp 值等于格值加上方与左方较小者",
+      "只依赖上一行时可用滚动数组把空间压到一维",
+      "区分 DP 与贪心，贪心不做全局比较容易出反例"
+    ],
+    "answerDetail": "判断标准是能不能把大问题拆成同类子问题，而且这些子问题会被重复用到。\n以二维网格最小路径和为例，状态 dp[i][j] 表示从起点走到该格的最小代价，转移是格值加上上方与左方中的较小者，第一行和第一列只能从一个方向来，这就是初始条件。\n因为只依赖上一行，可以用一维滚动数组把空间从 O(mn) 压到 O(n)。\n写 DP 的固定步骤是：定状态含义、写转移方程、定边界和初始值、定遍历顺序，最后再想能不能压缩空间或换状态定义。\n常见错误是状态定义含糊导致转移根本写不出、初始值漏掉、遍历顺序不对用到了还没计算的值、以及把贪心当 DP（比如硬币找零在某些面值下贪心是错的）。",
+    "followUps": [
+      "如果要求输出具体路径而不是最小代价，怎么改？",
+      "记忆化搜索和自底向上迭代各有什么优劣？"
+    ],
+    "tags": ["dynamic-programming", "state-transition", "optimization"]
+  },
+  {
+    "id": "al-007",
+    "category": "算法与数据结构",
+    "subcategory": "复杂度分析",
+    "difficulty": 1,
+    "orgTypes": ["soe", "university"],
+    "timeLimitSec": 200,
+    "question": "看这段代码你判断快不快：一个 for 循环里反复做字符串拼接，另有一个双层循环里用 list 的 in 做判断。你从复杂度角度说说问题出在哪，怎么改？",
+    "answerPoints": [
+      "Python 字符串不可变，反复拼接整体是 O(n²)",
+      "改成列表收集最后 join，降到 O(n)",
+      "list 的 in 是 O(n)，双层循环叠加成 O(n²)",
+      "换成 set 或 dict 做成员判断，均摊 O(1)",
+      "big-O 只看趋势，小数据量下常数可能主导",
+      "有疑问用 timeit 或 cProfile 实测热点"
+    ],
+    "answerDetail": "复杂度分析先看增长的数量级，再看常数。\n字符串在 Python 里不可变，每次加等号都要分配新字符串并拷贝已有内容，循环 n 次就是 O(n²)，数据量一大就崩，正确写法是先 append 到列表最后统一 join，或者用 io.StringIO。\nlist 的 in 是线性扫描，外面再套一层循环就是 O(n²)，把待查集合提前转成 set 或 dict，成员判断降为均摊 O(1)，整体就变成 O(n)。\n还要留意 big-O 只描述趋势，n 很小时常数可能主导，别过早优化；有疑问就用 timeit 或 cProfile 实测热点，再决定改哪里。常见错误是把 O(n) 当成绝对快慢、忽略 Python 内置操作自身的代价、以及在循环里反复调用昂贵函数。",
+    "followUps": [
+      "dict 查找为什么是均摊 O(1)，最坏情况呢？",
+      "如果数据规模只有几百条，你还会做这些优化吗？"
+    ],
+    "tags": ["complexity", "big-o", "profiling"]
+  },
+  {
+    "id": "al-008",
+    "category": "算法与数据结构",
+    "subcategory": "并发手撕题",
+    "difficulty": 3,
+    "orgTypes": ["ai_startup", "uav_robot", "soe"],
+    "timeLimitSec": 420,
+    "question": "手写一个函数：给一批 URL 做并发请求，单个请求最多等 2 秒，失败重试 2 次，最后返回成功结果和失败清单。说清超时、并发度和异常处理你是怎么设计的。",
+    "answerPoints": [
+      "用 asyncio.gather 或线程池并发，信号量限制最大并发数",
+      "每个请求单独设 2 秒超时，总超时另算",
+      "只对超时和网络异常重试，加指数退避与抖动",
+      "用 return_exceptions 或逐个 try 收集异常不中断整批",
+      "返回成功列表与失败清单，失败项带原因和重试次数",
+      "复用连接池与 Client，整批支持取消"
+    ],
+    "answerDetail": "结构上先建信号量限制同时进行的请求数，避免一次打出去几千个连接把自己和对方拖垮；每个任务内部包一层重试循环，用 asyncio.wait_for 或 httpx 的 Timeout 控制单次 2 秒超时，命中超时或连接错误就退避重试，最多两次，仍失败就把异常信息记下来。\n整批用 asyncio.gather 并设 return_exceptions=True，这样个别失败不会让整个 gather 抛异常，遍历结果按类型分流到成功和失败清单，失败项带上 url、错误类型、重试次数便于排查。\n生产上还要复用 Client 连接池、给整批设总超时上限，并对 429 和 5xx 区别处理。常见错误是把超时设在整批而非单个请求、重试没退避反而打爆对方、except 吞掉异常导致失败清单为空。",
+    "followUps": [
+      "如果要把这套逻辑改成多进程版本，哪里会不一样？",
+      "信号量的大小你怎么定？定大了会怎样？"
+    ],
+    "tags": ["asyncio", "timeout", "retry", "concurrency"]
+  }
+]
