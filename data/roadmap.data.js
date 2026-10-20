@@ -80,13 +80,14 @@ window.ROADMAP = {
     },
     {
       id: "W4", date: "11/02–11/08", title: "LLM 认知与本地推理", phase: "P0", hours: 14,
-      goal: "建立对模型的「体感」：token、上下文、采样、成本、显存。工位笔记本只有 4GB 显存，本地大模型实验留给家里的台式机。",
-      depth: "能一句话说清 token/上下文窗口/temperature 对输出的影响；能算清「4GB 显存 + 16GB 内存能跑什么、12GB 能跑什么」，并知道哪些实验必须等回家做；面对「为什么不用更大模型」能给出成本/延迟/效果三角答案。",
+      goal: "建立对模型的「体感」：token、上下文、采样、成本、显存。本地部署只求看懂，真要做实验走云端按小时租卡。",
+      depth: "能一句话说清 token/上下文窗口/temperature 对输出的影响；能算清「什么模型要多少显存、每百万 token 多少钱」；面对「为什么不用更大模型」能给出成本/延迟/效果三角答案。",
       tasks: [
         { id: "W4-1", level: 1, need: "key", box: 90, text: "读 hello-agents 前几章 + 一份官方 API 文档", desc: "重点看消息角色、上下文结构、工具调用字段" },
         { id: "W4-3", level: 2, need: "ai", box: 15, text: "搞懂「本地部署」是怎么回事：看一遍 Ollama/vLLM 的启动命令与显存账单，不必自己跑", desc: "台式机已改作游戏 + 文件整理机，不装 CUDA/PyTorch。这部分只求面试能讲清：本地部署省什么、贵在哪、什么场景才值得" },
         { id: "W4-4", level: 2, need: "key", box: 90, text: "写《模型选型与成本对比报告》", desc: "云端 3 家 + 本地模型，按价格/延迟/函数调用/上下文长度四维对比，必须是自测数据" },
         { id: "W4-5", level: 3, need: "skim", box: 15, text: "整理「显存与成本」账本：什么模型要多少显存、每百万 token 多少钱", desc: "面试硬知识 + 选型判断力。会算账比会部署值钱得多" },
+        { id: "W4-7", level: 2, need: "core", box: 90, text: "三模型对比实测：贵的 / 快的 / 便宜的，同一任务看差异", desc: "不看论文，只看真实表现。记录输出质量、延迟、单价三项，这就是面试「你怎么选模型」的答案素材", starter: { have: "一个你熟悉的真实任务（如文献摘要）+ 3 个不同价位模型的 API Key", want: "同一批 10 条输入跑 3 个模型，出一张对比表", first: "先用最便宜的那个跑 1 条，确认能通" } },
       ]
     },
     {
@@ -201,6 +202,7 @@ window.ROADMAP = {
         { id: "W13-2", level: 2, need: "key", box: 90, text: "读透一个 200 行的 mini agent 源码，说清每一步为什么这么写", desc: "不用手写，读就行。AI 时代手写 agent loop 已无价值，但读懂它才能判断别人的 agent 哪里有问题" },
         { id: "W13-3", level: 2, need: "key", box: 90, text: "接入计算器与文件读写两个工具，跑通 5 个任务", desc: "至少包含一个需要 3 步以上才能完成的任务" },
         { id: "W13-4", level: 2, need: "key", box: 90, text: "画循环时序图并写进 README", desc: "这张图面试时能直接白板复现" },
+        { id: "W13-7", level: 2, need: "core", box: 120, text: "挑一个开源 agent 项目读主循环，找出 3 个它做得比你好 / 3 个你怀疑有隐患的地方", desc: "这是「读懂」而非「手写」。面试问「你了解 agent 吗」，这段分析比跑通 demo 值钱", starter: { have: "一个 star 数高的 agent 仓库（如 openhands / auto-gpt 类的简化实现）", want: "3 好 3 疑，每条附代码位置", first: "只读主循环那一个文件（通常叫 agent.py / loop.py），别通读全仓" } },
         { id: "W13-5", level: 2, need: "key", box: 90, text: "读 Anthropic《Building Effective Agents》英文原文", desc: "搞清 workflow 与 agent 的边界，面试可直接引用其框架" },
         { id: "W13-6", level: 2, need: "key", box: 90, text: "LeetCode 5 题（DP 入门）", desc: "爬楼梯、打家劫舍、最长递增子序列" }
       ]
@@ -216,6 +218,7 @@ window.ROADMAP = {
         { id: "W14-4", level: 2, need: "key", box: 90, text: "写工具单测 + 一组「工具误用」用例", desc: "验证模型传错类型/缺参数时系统的行为" },
         { id: "W14-5", level: 3, need: "skim", box: 15, text: "读 12-Factor Agents，对照自己的设计打勾", desc: "把差距写成待办" },
         { id: "W14-7", level: 2, need: "key", box: 90, text: "让 AI 写工具实现，你只写 schema 和测试，直到「误用率」下降", desc: "工具设计 = 判断力（你写），函数实现 = 体力活（AI 写）。跑一轮「你定标准 → AI 实现 → 你来测」的闭环" },
+        { id: "W14-8", level: 2, need: "core", box: 120, text: "收集 20 条真实的工具调用失败记录，归纳出 3 类根因", desc: "是描述没写清？参数类型不对？还是模型理解错意图？分清这三类，才知道该改 schema 还是改提示词", starter: { have: "项目 B 跑过的 20 次工具调用日志（含失败）", want: "一张 3 类根因的分布表 + 每类 1 个修法", first: "先只看失败的 5 条，手动分类，确认分类标准站得住" } },
       ]
     },
     {
@@ -226,6 +229,7 @@ window.ROADMAP = {
         { id: "W15-1", level: 2, need: "key", box: 90, text: "读 MCP 官方文档：client/server、tools/resources/prompts", desc: "搞清 stdio 与 HTTP 两种传输的适用场景" },
         { id: "W15-2", level: 3, need: "key", box: 90, text: "写一个 MCP Server：把课题仿真脚本或文献检索暴露出去", desc: "建议 4 个工具以内，把描述写清楚" },
         { id: "W15-7", level: 2, need: "core", box: 240, text: "判断：什么能力适合暴露成 MCP 工具，什么能力不该暴露", desc: "这是协议设计判断力，不是 API 用法。判断错会把「内部脚本」变成「对外承诺」", starter: { have: "你课题里的 5 个可脚本化的动作（仿真、调参、读数据等）", want: "逐个判定「该 / 不该」暴露成 MCP 工具，并说明理由", first: "先只判 1 个，我陪你过判断标准" } },
+        { id: "W15-8", level: 2, need: "core", box: 120, text: "同一个能力，分别做成 MCP 工具和普通函数，对比「通用 agent 能不能用起来」", desc: "这是 MCP 存在的唯一理由。自己验证一遍，比读十篇博客都实在", starter: { have: "W15-2 写好的 MCP server + 一个等价普通函数", want: "同一个 query 分别走两条路，记录成功率与踩坑点", first: "先用普通函数跑一次，记录它需要多少前置说明" } },
         { id: "W15-3", level: 2, need: "use", box: 45, text: "在支持 MCP 的客户端接入并演示", desc: "录一段演示，写进 README" },
         { id: "W15-6", level: 1, need: "key", box: 90, text: "更新简历里的项目 B 描述", desc: "趁热写，别等最后回忆" }
       ]
@@ -239,6 +243,7 @@ window.ROADMAP = {
         { id: "W16-2", level: 2, need: "key", box: 90, text: "用 LangGraph 官方示例跑通一个带条件路由的小图，能说清 state 语义即可", desc: "不深挖框架 API（半年一换）。只需要能判断「什么场景值得上框架、什么场景是负担」" },
         { id: "W16-3", level: 2, need: "key", box: 90, text: "接入 checkpoint 持久化与 human-in-the-loop", desc: "为「危险操作前需人工确认」留接口" },
         { id: "W16-7", level: 2, need: "core", box: 240, text: "判断：项目 B 里哪些环节值得上框架，哪些反而增加负担", desc: "框架能给你状态持久化和可视化，也会给你升级成本和调试难度。这个取舍 AI 替不了你", starter: { have: "项目 B 的 5 个环节（规划、工具调用、记忆、审核、重试）", want: "逐个判「手写 / 上框架」，并说清代价", first: "先判「工具调用」这一个环节" } },
+        { id: "W16-8", level: 2, need: "core", box: 120, text: "把项目 B 的一个环节改成手写，量一下省了多少行 / 多了多少坑", desc: "反向验证：拆掉框架之后到底更难还是更简单？这个结论是你自己的，不是抄来的", starter: { have: "项目 B 里上了框架的那个环节", want: "手写版 vs 框架版的代码行数、调试耗时、可读性三项对比", first: "先只替换一个最小的子步骤，别整体重写" } },
         { id: "W16-6", level: 1, need: "key", box: 90, text: "整理项目 B 的架构图", desc: "README 首图" }
       ]
     },
@@ -248,6 +253,8 @@ window.ROADMAP = {
       depth: "这周的目标是「不断档」。休息是计划的一部分，别自责。",
       tasks: [
         { id: "W17-2", level: 1, need: "key", box: 90, text: "用 2 小时整理简历素材清单", desc: "把项目 A/B 的数字、截图、难点列成表" },
+        { id: "W17-4", level: 1, need: "key", box: 60, text: "重读 W11 评测笔记，挑出 3 个能对着面试官讲的点", desc: "只挑不写，写在便签上即可，别写长文" },
+        { id: "W17-5", level: 1, need: "use", box: 45, text: "给项目 A 录一段 60 秒口述（手机录音即可）", desc: "不剪辑、不写稿。回放一遍，标出卡壳的地方" },
       ]
     },
     {
@@ -255,6 +262,8 @@ window.ROADMAP = {
       goal: "恢复状态，为最后冲刺蓄力。",
       depth: "连续两周低强度是刻意的，防止二月崩盘。",
       tasks: [
+        { id: "W18-3", level: 1, need: "key", box: 90, text: "把 W17 的 60 秒口述扩成 3 分钟，能讲清「做了什么 / 卡在哪 / 怎么解决」", desc: "面试的核心就是这个结构。仍不写稿，直接讲" },
+        { id: "W18-4", level: 1, need: "use", box: 45, text: "清空一次浏览器缓存，从零跑一遍项目 A 的 README 步骤", desc: "模拟「别人拿到你仓库」的场景，看 README 缺哪一步" },
       ]
     },
     {
