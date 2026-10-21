@@ -104,6 +104,30 @@ python state_backup.py restore --name state-20261021-151445-baseline
 ## 保险起见
 
 - 你的 `backups/` 里还有每天 22:00 的整包备份（`AgentHub-Backup` 计划任务），
-  那个是 `workspace-*.zip`，包含完整的 `state/`，保留 10 份。
+  那个是 `workspace-*.zip`，包含完整的 `state/`（含冉冉的画像），保留 10 份。
+- 已实测验证：备份 zip 里能取回 `users/u2/memory.json`，称呼/课题/11 个画像字段都在；
+  API Key 在 zip 里是**空值**（默认脱敏），可以安全地留在硬盘上。
+- 该任务已设 `StartWhenAvailable`：22:00 电脑没开，下次开机自动补跑一次。
 - 两层备份互不依赖：`backups/state/` 是细粒度、只存数据；
   `workspace-*.zip` 是粗粒度、连代码一起存。
+
+### 从 zip 里单独救一个人
+
+```powershell
+# 只解出冉冉的数据，不覆盖别人
+Expand-Archive backups\workspace-20261021-152354.zip -DestinationPath $env:TEMP\rs
+Copy-Item $env:TEMP\rs\ai-agent-hub\state\users\u2 -Destination ai-agent-hub\state\users\u2 -Recurse -Force
+python state_backup.py verify
+```
+
+---
+
+## 已经踩过的两个坑（别再踩）
+
+1. **不要用 `git stash -u` 来「清干净工作区」再更新。**
+   `-u` 会把未跟踪的 `apply-update.cmd` 自己也收走，脚本跑到一半文件消失，
+   cmd 报 `The batch file cannot be found`。脚本里已改成只 stash 已跟踪文件。
+2. **服务端打印 emoji 会打崩整个服务。**
+   Windows 控制台默认 GBK，`⚠️` 编不出来会 `UnicodeEncodeError` 直接退出。
+   已在 `main()` 里把 stdout/stderr 改成 utf-8 + `errors="replace"`。
+
