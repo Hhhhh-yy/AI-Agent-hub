@@ -485,6 +485,69 @@ window.App = (function () {
       App.toast("进度已导出", "ok");
     },
 
+    /* ---------------- 分享链接：换网络后 IP 会变，这里现取现显示 ---------------- */
+    async openShare() {
+      const hint = $("#shareHint");
+      const warn = $("#shareWarn");
+      const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ""; };
+      if (hint) hint.textContent = "正在检测当前网络…";
+      if (warn) warn.innerHTML = "";
+      setVal("shareSelf", "");
+      setVal("shareOther", "");
+
+      let res = null;
+      try { res = await App.get("/api/lan"); } catch (e) { res = null; }
+
+      if (!res || !res.ok) {
+        if (hint) hint.textContent = "读不到网络信息：服务可能没启动。";
+        if (warn) warn.innerHTML = "先在电脑上双击 <code>launch-lan.cmd</code> 启动服务，再点「重新检测」。";
+        App.openModal("shareModal");
+        return;
+      }
+
+      const ips = res.ips || [];
+      const port = res.port || 8787;
+      const token = res.token || "";
+      const local = "http://127.0.0.1:" + port + "/" + (token ? "?k=" + token : "");
+      const localEl = $("#shareLocal");
+      if (localEl) localEl.textContent = local;
+
+      const other = (res.users || []).find(u => !u.primary);
+      const u2Name = $("#shareU2Name");
+      if (u2Name) u2Name.textContent = other ? other.name : "同学";
+
+      if (!ips.length) {
+        if (hint) hint.textContent = "没检测到可用的局域网地址 —— 现在只有这台电脑自己能打开。";
+        if (warn) {
+          warn.innerHTML = "你大概<strong>没连网络</strong>（或连的是虚拟网卡）。" +
+            "连上 WiFi 或手机热点后，点下面的「重新检测」。";
+        }
+        setVal("shareSelf", local);
+        setVal("shareOther", local);
+        App.openModal("shareModal");
+        return;
+      }
+
+      const ip = ips[0];
+      const selfUrl = "http://" + ip + ":" + port + "/" + (token ? "?k=" + token : "");
+      const otherUrl = "http://" + ip + ":" + port + "/" + (token ? "?k=" + token + "&" : "?") +
+        "u=" + (other ? other.slug : "u2");
+
+      if (hint) {
+        hint.textContent = "当前地址 " + ip + (ips.length > 1 ? "（检测到 " + ips.length + " 个可用地址，已选最可能的一个）" : "") +
+          "。换网络后 IP 会变，重新打开本窗口即可拿到新链接。";
+      }
+      setVal("shareSelf", selfUrl);
+      setVal("shareOther", otherUrl);
+
+      if (warn) {
+        warn.innerHTML = "同学要和你连<strong>同一个网络</strong>（同一个 WiFi 或同一个手机热点）才能打开。" +
+          "用手机热点时，你的电脑不能休眠。";
+      }
+
+      App.openModal("shareModal");
+    },
+
     /* ---------------- 启动 ---------------- */
     async boot() {
       // 0) 先确定成员（多用户：数据完全隔离）与全局设置
@@ -589,6 +652,24 @@ window.App = (function () {
       $("#btnClearKey").addEventListener("click", () => App.clearKey());
       $("#btnFetchModels").addEventListener("click", () => App.fetchModels());
       $("#btnExportState").addEventListener("click", () => App.exportState());
+      if ($("#btnShareLink")) $("#btnShareLink").addEventListener("click", () => App.openShare());
+      if ($("#btnRefreshShare")) $("#btnRefreshShare").addEventListener("click", () => App.openShare());
+      $$("[data-copy]").forEach(b => b.addEventListener("click", function () {
+        const el = document.getElementById(b.dataset.copy);
+        if (!el) return;
+        el.select();
+        el.setSelectionRange(0, 99999);
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(el.value).then(
+              () => App.toast("已复制", "ok"),
+              () => { document.execCommand("copy"); App.toast("已复制", "ok"); });
+          } else {
+            document.execCommand("copy");
+            App.toast("已复制", "ok");
+          }
+        } catch (e) { App.toast("复制失败，请手动选中复制", "bad"); }
+      }));
 
       const hash = (location.hash || "").replace("#", "");
       App.go(["roadmap", "resume", "interview", "chat", "memory", "trending"].indexOf(hash) >= 0 ? hash : "roadmap");

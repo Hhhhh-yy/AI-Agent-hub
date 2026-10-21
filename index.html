@@ -58,6 +58,7 @@
     </div>
 
     <div class="side-foot">
+      <button class="ghost-btn" id="btnShareLink">🔗 分享链接</button>
       <button class="ghost-btn" id="btnSettings">⚙️ 模型设置</button>
       <button class="ghost-btn" id="btnExportState">⬇️ 导出进度</button>
     </div>
@@ -487,6 +488,51 @@
       <button class="ghost-btn danger" id="btnClearKey">清除 Key</button>
       <button class="ghost-btn" id="btnTestKey">测试连接</button>
       <button class="primary-btn" id="btnSaveSettings">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 分享链接弹窗 ================= -->
+<div class="modal hidden" id="shareModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2>🔗 当前可用链接</h2>
+      <button class="icon-btn" data-close-modal>✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small" id="shareHint">正在读取当前网络地址…</p>
+
+      <div class="field">
+        <label>你自己用（主账号）</label>
+        <div class="share-row">
+          <input type="text" id="shareSelf" readonly />
+          <button class="ghost-btn" data-copy="shareSelf">复制</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>发给同学（固定到 <span id="shareU2Name">她</span> 的账号）</label>
+        <div class="share-row">
+          <input type="text" id="shareOther" readonly />
+          <button class="ghost-btn" data-copy="shareOther">复制</button>
+        </div>
+      </div>
+
+      <div class="share-warn" id="shareWarn"></div>
+
+      <details class="share-detail">
+        <summary>连不上？点这里看排查步骤</summary>
+        <ol class="share-ol">
+          <li>确认两边连的是<strong>同一个网络</strong>（同一个 WiFi 或同一个手机热点）。</li>
+          <li>确认这台电脑<strong>没休眠</strong>、服务在跑（下面会显示状态）。</li>
+          <li>换了网络后 IP 会变，<strong>重新打开这个窗口复制新链接</strong>即可。</li>
+          <li>还是不行就用本机地址在自己电脑上验证：<code id="shareLocal"></code></li>
+        </ol>
+      </details>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost-btn" id="btnRefreshShare">重新检测</button>
+      <button class="primary-btn" data-close-modal>关闭</button>
     </div>
   </div>
 </div>

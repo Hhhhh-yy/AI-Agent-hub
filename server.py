@@ -85,8 +85,29 @@ def load_or_create_token():
         return ""
 
 
+def _usable_lan_ip(ip):
+    """过滤掉别人连不上的地址。
+
+    排掉：127.x（本机回环）、169.254.x（没拿到 DHCP 时的自动地址，等于没网），
+         以及 WSL / Hyper-V 的虚拟网卡段 —— 那些地址只有本机能访问，
+         发给同学她一定打不开，摆在链接里只会让人以为网站坏了。
+    """
+    if not ip or ip.startswith("127.") or ip.startswith("169.254."):
+        return False
+    try:
+        import subprocess  # noqa: PLC0415
+        out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                              "(Get-NetIPAddress -IPAddress %s -ErrorAction SilentlyContinue).InterfaceAlias" % ip],
+                             capture_output=True, text=True, timeout=4).stdout.strip()
+        if out and ("WSL" in out or "Hyper-V" in out or "vEthernet" in out or "Loopback" in out.lower()):
+            return False
+    except Exception:  # noqa: BLE001
+        pass
+    return True
+
+
 def lan_ips():
-    """列出本机的局域网地址，方便把访问链接发给别人。"""
+    """列出本机的局域网地址，方便把访问链接发给别人。只返回别人真能连上的。"""
     ips = []
     try:
         import socket as _s  # noqa: PLC0415
@@ -94,7 +115,7 @@ def lan_ips():
         try:
             sock.connect(("8.8.8.8", 80))
             ip = sock.getsockname()[0]
-            if ip and not ip.startswith("127."):
+            if _usable_lan_ip(ip):
                 ips.append(ip)
         finally:
             sock.close()
@@ -104,7 +125,7 @@ def lan_ips():
         import socket as _s  # noqa: PLC0415
         for info in _s.getaddrinfo(_s.gethostname(), None, _s.AF_INET):
             ip = info[4][0]
-            if ip not in ips and not ip.startswith("127."):
+            if ip not in ips and _usable_lan_ip(ip):
                 ips.append(ip)
     except Exception:
         pass
@@ -1688,6 +1709,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "version": "2.0", **public_settings(), "user": public_users()})
         if path == "/api/users":
             return self._json({"ok": True, **public_users()})
+        if path == "/api/lan":
+            # 给「分享链接」窗用：返回当前这台机器在所有网卡上的局域网地址。
+            # 换网络（路由器→手机热点）后 IP 会变，这个接口每次都重新探测，
+            # 所以用户点一下就能拿到当下真正能用的链接。
+            ips = lan_ips()
+            users = load_users()["users"]
+            return self._json({
+                "ok": True,
+                "ips": ips,
+                "port": self.server.server_address[1],
+                "token": ACCESS_TOKEN,
+                "lanMode": bool(ACCESS_TOKEN),
+                "users": [{"slug": u["slug"], "name": u.get("name") or u["slug"],
+                           "primary": bool(u.get("primary"))} for u in users],
+            })
         if path == "/api/settings":
             return self._json({"ok": True, **public_settings()})
         if path == "/api/state":

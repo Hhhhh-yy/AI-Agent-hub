@@ -284,6 +284,41 @@ input[type="text"], input[type="password"], textarea, select {
 input:focus, textarea:focus, select:focus { border-color: rgba(34, 211, 238, 0.55); box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12); }
 textarea { resize: vertical; }
 
+/* ===================== 分享链接窗 ===================== */
+.share-row { display: flex; gap: 8px; align-items: stretch; }
+.share-row input {
+  flex: 1; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px; letter-spacing: .2px;
+  background: rgba(4, 7, 15, 0.85); color: var(--accent-2, #67e8f9);
+  cursor: text; user-select: all;
+}
+.share-row .ghost-btn { flex: 0 0 auto; padding: 0 16px; white-space: nowrap; }
+
+.share-warn {
+  margin: 4px 0 14px; padding: 11px 13px; border-radius: var(--radius-sm);
+  font-size: 12.5px; line-height: 1.75; color: #fbbf24;
+  background: rgba(251, 191, 36, 0.09);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+}
+.share-warn:empty { display: none; }
+.share-warn code, .share-detail code {
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+  padding: 1px 5px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.09); color: var(--text);
+}
+
+.share-detail { margin-top: 4px; }
+.share-detail summary {
+  cursor: pointer; font-size: 12.5px; color: var(--text-2);
+  padding: 6px 0; user-select: none;
+}
+.share-detail summary:hover { color: var(--text); }
+.share-ol {
+  margin: 8px 0 0; padding-left: 20px;
+  font-size: 12.5px; color: var(--text-2); line-height: 1.9;
+}
+.share-ol strong { color: var(--text); font-weight: 600; }
+
 /* ===================== KPI ===================== */
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .kpi {
