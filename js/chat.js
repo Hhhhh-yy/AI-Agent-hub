@@ -138,30 +138,40 @@ window.ChatPage = (function () {
 
   function winList() {
     const R = window.ROADMAP;
-    const out = (R ? R.weeks : []).map(w => ({ id: w.id, label: w.id, title: w.title }));
-    out.push({ id: "free", label: "自由", title: "自由提问" });
-    // 日期窗口挂到各自归属周下；没归属的放到「学习日」组
+    const weeks = R ? R.weeks : [];
+
+    // 日期窗口（唯一可以对话的窗口）
     const days = savedDays().slice().sort((a, b) => (a.id < b.id ? -1 : 1));
-    const byOwner = {};
-    const orphan = [];
-    days.forEach(function (d) {
-      const owner = d.owner || "";
-      if (owner && (R ? R.weeks.some(w => w.id === owner) : false)) {
-        (byOwner[owner] = byOwner[owner] || []).push(d.id);
-      } else {
-        orphan.push(d.id);
-      }
+
+    const out = [];
+    // 每个 W 变成一个「分组」，本身不可对话
+    weeks.forEach(function (w) {
+      const kids = days.filter(d => (d.owner || "") === w.id).map(d => d.id);
+      out.push({
+        id: w.id, label: w.id, title: w.title,
+        isGroup: true, days: kids
+      });
     });
-    // 每周的 label 后带上它挂的学习日数量
-    out.forEach(function (w) {
-      const kids = byOwner[w.id] || [];
-      if (kids.length) { w.days = kids; w.label = w.id; }
-    });
-    // 孤立的学习日统一放在最后
+
+    // 未归类的日期窗口
+    const orphan = days.filter(function (d) {
+      const o = d.owner || "";
+      return !o || !weeks.some(w => w.id === o);
+    }).map(d => d.id);
+
     orphan.forEach(function (id) {
       out.push({ id: id, label: dayLabel(id), title: "学习日 " + dayLabel(id), isDay: true, orphan: true });
     });
+
+    // 自由窗（也可对话，留一个应急入口）
+    out.push({ id: "free", label: "自由", title: "自由提问（不归类）", isDay: true, isFree: true });
+
     return out;
+  }
+
+  /* 某个 id 是不是「可对话窗口」 */
+  function isChatWin(id) {
+    return /^day-/.test(id) || id === "free";
   }
 
   function winMeta(id) {
@@ -207,8 +217,6 @@ window.ChatPage = (function () {
     const bar = $("#winBar");
     if (!bar) return;
     const all = winList();
-    const weekTabs = all.filter(w => !w.isDay);          // W1–W20 + 自由
-    const orphanTabs = all.filter(w => w.isDay);         // 未归类的学习日
 
     const cntOf = function (id) {
       try {
@@ -218,34 +226,50 @@ window.ChatPage = (function () {
       } catch (e) { return 0; }
     };
 
-    let html = weekTabs.map(function (w) {
-      const cnt = cntOf(w.id);
-      // 该周下面挂的学习日：显示成「10.20 ×」小标签，紧跟在这个周 tab 后面
-      const dayChips = (w.days || []).map(function (did) {
-        const on = (did === currentWin) ? " on" : "";
-        return '<span class="win-day-chip' + on + '" data-win="' + did + '" title="学习日 ' + App.escape(dayLabel(did)) + '">' +
-          App.escape(dayLabel(did)) +
-          '<i class="win-day-x" data-win-del="' + did + '" title="删除这天">×</i></span>';
-      }).join("");
-      return '<button class="win-tab ' + (w.id === currentWin ? "active" : "") +
-        '" data-win="' + w.id + '" title="' + App.escape(w.id === "free" ? "自由提问" : (w.id + " · " + w.title)) + '">' +
-        App.escape(w.label) + (cnt ? '<i>' + cnt + '</i>' : "") +
-        '</button>' + dayChips;
-    }).join("");
+    let html = "";
+    all.forEach(function (w) {
+      if (w.isGroup) {
+        // 周分组标题（不可点击对话）
+        html += '<span class="win-group' + (w.days.length ? " has" : "") + '" title="' + App.escape(w.title) + '">' +
+          App.escape(w.label) +
+          (w.days.length ? '<i>' + w.days.length + '</i>' : "") +
+          '</span>';
+        // 挂在它下面的日期窗口
+        w.days.forEach(function (did) {
+          const cnt = cntOf(did);
+          const on = (did === currentWin) ? " active" : "";
+          html += '<button class="win-day' + on + '" data-win="' + did + '" title="学习日 ' + App.escape(dayLabel(did)) + '">' +
+            App.escape(dayLabel(did)) + (cnt ? '<i>' + cnt + '</i>' : "") +
+            '<span class="win-x" data-win-del="' + did + '" title="删除这天">×</span></button>';
+        });
+      }
+    });
 
-    if (orphanTabs.length) {
-      html += '<span class="win-sep">未归类学习日</span>' + orphanTabs.map(function (w) {
+    // 未归类的日期窗口
+    const orphans = all.filter(w => w.isDay && w.orphan);
+    if (orphans.length) {
+      html += '<span class="win-sep">未归类</span>';
+      orphans.forEach(function (w) {
         const cnt = cntOf(w.id);
-        return '<button class="win-tab day ' + (w.id === currentWin ? "active" : "") +
-          '" data-win="' + w.id + '" title="学习日 ' + App.escape(dayLabel(w.id)) + '（可在右侧归到某一周）">' +
+        html += '<button class="win-day warn' + (w.id === currentWin ? " active" : "") + '" data-win="' + w.id +
+          '" title="学习日 ' + App.escape(dayLabel(w.id)) + '（请在右侧归到某一周）">' +
           App.escape(w.label) + (cnt ? '<i>' + cnt + '</i>' : "") +
           '<span class="win-x" data-win-del="' + w.id + '" title="删除这天">×</span></button>';
-      }).join("");
+      });
     }
 
-    html += '<button class="win-tab add" data-win-add="1" title="新建今天的学习窗口（每天一个干净的对话，会自动归到对应周）">+ 今天</button>';
+    // 自由窗
+    const free = all.find(w => w.isFree);
+    if (free) {
+      html += '<button class="win-day free' + (free.id === currentWin ? " active" : "") + '" data-win="free" title="自由提问（不归类到任何周）">自由</button>';
+    }
+
+    // 新建按钮
+    html += '<button class="win-add" data-win-add="1" title="新建今天的学习窗口（每天一个干净的对话，会自动归到对应周）">+ 今天</button>';
+
     bar.innerHTML = html;
 
+    // 绑定
     $$("#winBar [data-win]").forEach(function (b) {
       b.addEventListener("click", function (e) {
         if (e.target.dataset.winDel) return;
@@ -256,9 +280,13 @@ window.ChatPage = (function () {
       x.addEventListener("click", function (e) {
         e.stopPropagation();
         const id = x.dataset.winDel;
-        if (!confirm("删除「" + dayLabel(id) + "」这个学习日窗口？只删这一窗，其他窗口和长期记忆不受影响。")) return;
+        if (!confirm("删除「" + dayLabel(id) + "」这个学习日窗口？只删这一窗。")) return;
         removeDay(id);
-        if (currentWin === id) setWindow("free");
+        if (currentWin === id) {
+          const today = dayKey();
+          ensureDay(today);
+          setWindow(today);
+        }
         renderWinBar();
         App.toast("已删除该学习日", "ok");
       });
@@ -270,9 +298,10 @@ window.ChatPage = (function () {
       setWindow(id);
       renderWinBar();
       renderDayOwner();
-      App.toast("已新建今天（" + dayLabel(id) + "）的学习窗口，已自动归到 " + (dayOwner(id) || "（未识别）"), "ok");
+      App.toast("已新建今天（" + dayLabel(id) + "）的学习窗口，归到 " + (dayOwner(id) || "（未识别）"), "ok");
     });
   }
+
 
   /* ====================== 学习日归属 ====================== */
   function renderDayOwner() {
@@ -280,21 +309,50 @@ window.ChatPage = (function () {
     if (!box) return;
     if (!/^day-/.test(currentWin)) { box.innerHTML = ""; box.classList.add("hidden"); return; }
     box.classList.remove("hidden");
+
     const R = window.ROADMAP;
     const cur = dayOwner(currentWin) || guessOwner(currentWin);
-    const opts = (R ? R.weeks : []).map(function (w) {
-      return '<option value="' + w.id + '"' + (w.id === cur ? " selected" : "") + '>' + w.id + ' · ' + App.escape(w.title) + '</option>';
-    }).join("");
-    box.innerHTML = '<span class="do-label">这天记到哪一周：</span>' +
-      '<select id="dayOwnerSel"><option value="">（不归类）</option>' + opts + '</select>' +
-      '<span class="muted small">自动判断：' + App.escape(cur || "未识别") + '</span>';
-    const sel = $("#dayOwnerSel");
-    if (sel) sel.addEventListener("change", function () {
-      setDayOwner(currentWin, sel.value);
-      renderWinBar();
-      renderDayOwner();
-      App.toast(sel.value ? "已归到 " + sel.value : "已取消归类", "ok");
+    const weeks = R ? R.weeks : [];
+
+    // 自定义下拉：原生 select 在暗色主题下白底白字，看不清
+    let list = '<button class="do-item' + (!cur ? " on" : "") + '" data-owner="">'
+      + '<span class="do-id">—</span><span class="do-name">不归类（留在「未归类」）</span></button>';
+    weeks.forEach(function (w) {
+      list += '<button class="do-item' + (w.id === cur ? " on" : "") + '" data-owner="' + w.id + '">' +
+        '<span class="do-id">' + w.id + '</span>' +
+        '<span class="do-name">' + App.escape(w.title) + '</span>' +
+        (w.id === cur ? '<span class="do-check">✓</span>' : '') +
+        '</button>';
     });
+
+    box.innerHTML =
+      '<div class="do-head">' +
+      '<span class="do-title">这天记到哪一周</span>' +
+      '<button class="do-toggle" id="dayOwnerToggle">' + App.escape(cur || "未归类") +
+      ' <span class="caret">▾</span></button>' +
+      '</div>' +
+      '<div class="do-list hidden" id="dayOwnerList">' + list + '</div>' +
+      '<div class="do-hint">当前自动判断：' + App.escape(cur || "未识别") + '</div>';
+
+    const toggle = $("#dayOwnerToggle");
+    const listEl = $("#dayOwnerList");
+    if (toggle) toggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      listEl.classList.toggle("hidden");
+    });
+    $$("#dayOwnerList [data-owner]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        setDayOwner(currentWin, b.dataset.owner);
+        renderWinBar();
+        renderDayOwner();
+        App.toast(b.dataset.owner ? "已归到 " + b.dataset.owner : "已取消归类", "ok");
+      });
+    });
+    document.addEventListener("click", function hide(e) {
+      if (!e.target.closest || !e.target.closest("#dayOwnerBox")) {
+        if (listEl) listEl.classList.add("hidden");
+      }
+    }, { once: true });
   }
 
   /* ====================== 记忆：进度摘要 ====================== */
@@ -331,7 +389,13 @@ window.ChatPage = (function () {
       totalDone: App.doneTasks(),
       totalTasks: App.totalTasks(),
       overall: App.overallPct(),
-      hours: App.totalHours()
+      hours: App.totalHours(),
+      // 当前周里第一个没完成的任务（用于「当前进度」展示）
+      nextTask: (function () {
+        const done = App.weekDone(week.id || "");
+        const t = (week.tasks || []).find(x => done.indexOf(x.id) === -1);
+        return t ? t.text : "";
+      })()
     };
   }
 
@@ -428,6 +492,12 @@ window.ChatPage = (function () {
       "【回答要求】",
       "1. 先给结论和可执行动作，再解释原因；不要长篇教科书式铺垫。",
       "2. 涉及代码时给最小可运行示例（Python 优先），并指出常见坑。",
+      "2.1 **代码必须逐行注释，且要能一段一段读懂**：",
+      "     · 每行有意义的代码，上方一行 `#` 注释，写「它在干什么 + 为什么这么写」。",
+      "     · 每 3–8 行插一条 `# ---` 段注释，写「上一步拿到 X → 这一块用它做 Y」。",
+      "     · 嵌套最多 2 层；一行只做一件事，长表达式拆行，变量名要能读（raw_rows 而不是 a）。",
+      "     · 代码块外先给 3 行「读这段的顺序」：先看哪行、顺着什么往下、哪行是核心。",
+      "     · 代码块后给「改这里试试」：指出 1–2 个能安全改的参数和改动后的预期变化。",
       "3. 如果他问的东西偏离目标岗位或性价比低，直接说「不值得，建议改成 X」。",
       "4. 每次回答结尾给「下一步（今天就能做的 2–3 件事）」。",
       "5. 不确定的技术细节要说明不确定，不要编造 API 或论文。",
@@ -882,16 +952,33 @@ window.ChatPage = (function () {
         "· **语法层归你**（写函数、读文件、try 放哪、字符串处理）：**直接给完整可跑代码**，我要的是看懂，不是背。\n" +
         "· 判断标准：我这辈子只用一次的，给代码；我以后每天要做决策的，才让我自己想。";
     }
-    return "【这一项怎么分工】**整项都属于「拿走即用」**：请直接给完整可跑代码 + 逐段注释，只解释「这段在干什么」，不要留 NotImplementedError 让我填。";
+    return "【这一项怎么分工】**整项都属于「拿走即用」**：请直接给完整可跑代码，按下面的代码规则逐行注释，让我能一行一行读下来并安全改动，不要留 NotImplementedError 让我填。";
   }
 
   const DEPTH_RULE = {
-    core: "【深度：核心·深挖】这是面试会被追问的点。讲清原理 → 给完整示范代码 → 只在「设计判断」上让我选（见下面的分工）。",
-    key: "【深度：必学】要真会，但允许查文档。给完整可跑代码 + 逐段注释，让我改一处参数看变化。",
+    core: "【深度：核心·深挖】这是面试会被追问的点。讲清原理 → 给完整示范代码（按代码规则逐行注释）→ 只在「设计判断」上让我选（见下面的分工）。",
+    key: "【深度：必学】要真会，但允许查文档。给完整可跑代码（按代码规则逐行注释），让我改一处参数看变化。",
     use: "【深度：会用即可】不展开原理。直接给可粘贴的命令 / 配置，一句话说明它干了什么。目标 45 分钟内搞定。",
     ai: "【深度：交给AI】直接把成品给我（命令或代码），不要讲原理，10 分钟内做完。",
     skim: "【深度：了解·不深究】只讲 3 句话：它是什么、为什么存在、面试怎么答。不要让我动手。"
   };
+
+  /* 代码注释硬规则：目标是「基础弱的人能逐行读懂并安全改一处」，
+     所以要求逐行注释 + 段间衔接 + 允许看懂的低复杂度。 */
+  const CODE_RULES = [
+    "【代码注释硬约束（违反任何一条都算回答失败）】",
+    "1. **每一行有意义的代码，上方必须有一行 `#`（或 `//`）注释**，写清两件事：它在干什么 + 为什么这么写。",
+    "   · 反例：`df = df.dropna()`（无注释）",
+    "   · 正例：`# 删掉有缺失值的行：脏数据进来会让后面统计全变 NaN`",
+    "2. **每 3–8 行之间插一条「段注释」**，写清这块和上一块的连接关系，句式固定为「上一步拿到 X → 这一块用它做 Y」。",
+    "   段注释单独占一行、以 `# ---` 开头，方便我一眼找到块边界。",
+    "3. **嵌套层数最多 2 层**（一个 for 里最多一个 if）。要 3 层就说明该拆函数，请拆开并给函数起能读的中文名。",
+    "4. **一行只做一件事**。长表达式必须拆行，每行结尾用 `\\`（shell）或括号换行（Python），不许出现需要横向读 100 字符的行。",
+    "5. **每个代码块开头，代码块外先写 3 行以内的「读这段的顺序」**：先看哪行、再顺着什么往下看、哪行是核心。",
+    "6. **变量名必须能读**：不要 `a` / `d` / `tmp1`，用 `raw_rows` / `clean_rows` / `bad_count` 这种一眼知道装什么的。",
+    "7. **只留必要代码**：不要 import 一堆用不到的库，不要写异常捕获以外的防御代码，不要为了完整加 `if __name__ == \"__main__\"`。",
+    "8. **代码块结尾加一段「改这里试试」**：指出 1–2 个可以安全改的数字或字符串，并说明改动后我该看到什么变化。"
+  ];
 
   const FORMAT_RULES = [
     "【排版硬约束（违反任何一条都算回答失败）】",
@@ -936,6 +1023,9 @@ window.ChatPage = (function () {
       "2. 每个命令都要说明两件事：它在干什么 + 会改动我电脑的哪里。命令放进代码块，作用用一行「#」注释写在命令上方。",
       "3. 坑要就地提示：某一步有常见错误，就在这一步下面写「⚠️ 这一步的坑：症状现象 → 原因 → 怎么改」。",
       "4. 不要用「各来一次」「走完一次完整 X」这种压缩说法，把要做的动作一个一个拆开列出。",
+      "5. **只要出现代码块，就必须按下面的代码规则写**，我读不懂就等于没教。",
+      "",
+      CODE_RULES.join("\n"),
       "",
       FORMAT_RULES.join("\n"),
       "",
@@ -976,21 +1066,36 @@ window.ChatPage = (function () {
           ? "这块我只是了解层面，请控制在一屏内。"
           : "讲到我能在项目里正确选它、并在被质疑时说清取舍即可。"),
       "",
-      "【我的情况】初学者，术语必须第一次出现就用括号解释。讲完先不要给我练习题，等我追问。"
+      "【我的情况】初学者，术语必须第一次出现就用括号解释。讲完先不要给我练习题，等我追问。",
+      "",
+      CODE_RULES.join("\n")
     ].filter(Boolean).join("\n");
   }
 
+  /* 手把手/深挖的统一入口：
+     W 分组本身不能对话，所以落到「今天的日期窗口」，并把它归到该周。 */
+  function enterWeekChat(weekId) {
+    const today = dayKey();
+    ensureDay(today);
+    setDayOwner(today, weekId);          // 自动归到这一周
+    App.go("chat");
+    setWindow(today);
+    renderWinBar();
+    renderDayOwner();
+    return today;
+  }
+
   function teachTask(week, task) {
-    openWindow(week.id);
-    App.toast("已切到「" + week.id + "」窗口：" + task.text.slice(0, 14) + "…", "ok");
+    enterWeekChat(week.id);
+    App.toast("已进入今天的窗口，并归到「" + week.id + "」：" + task.text.slice(0, 14) + "…", "ok");
     const prompt = teachPrompt(week, task);
-    setTimeout(function () { send(prompt); }, 160);
+    setTimeout(function () { send(prompt); }, 220);
   }
 
   function deepTask(week, task) {
-    openWindow(week.id);
-    App.toast("已切到「" + week.id + "」窗口，开始深挖：" + task.text.slice(0, 14) + "…", "ok");
-    setTimeout(function () { send(deepPrompt(week, task)); }, 160);
+    enterWeekChat(week.id);
+    App.toast("已进入今天的窗口（归到 " + week.id + "），开始深挖：" + task.text.slice(0, 14) + "…", "ok");
+    setTimeout(function () { send(deepPrompt(week, task)); }, 220);
   }
 
   /* ====================== 关注清单 ====================== */
@@ -1146,7 +1251,7 @@ window.ChatPage = (function () {
       '<span class="b-track"><i class="b-fill" style="width:' + d.overall + '%"></i></span>' +
       '<span class="b-val">' + d.overall + '%</span></div></div>' +
       '<ul class="bullet-list" style="margin-top:10px">' +
-      "<li><b>当前周次</b>：第 " + d.weekIndex + " 周 · " + App.escape(d.week) + "</li>" +
+      "<li><b>当前进度</b>：" + App.escape(d.week) + (d.nextTask ? "<br><span class=\"muted small\">下一项：" + App.escape(d.nextTask.slice(0, 30)) + "…</span>" : "") + "</li>" +
       "<li><b>已完成任务</b>：" + d.totalDone + " / " + d.totalTasks + "</li>" +
       "<li><b>累计时长</b>：" + d.hours + " 小时</li>" +
       "<li><b>最近面试</b>：" + App.escape(d.rounds.length ? d.rounds.join("；") : "暂无记录") + "</li>" +
@@ -1253,7 +1358,8 @@ window.ChatPage = (function () {
       const today = dayKey();
       ensureDay(today);
       const last = localStorage.getItem(App.userKey(LS_WIN));
-      currentWin = (last && winList().some(w => w.id === last)) ? last : today;
+      // 只接受「可对话窗口」（日期窗 / 自由窗）；旧的 W 窗口记录直接落到今天
+      currentWin = (last && isChatWin(last) && winList().some(w => w.id === last)) ? last : today;
       if (!winList().some(w => w.id === currentWin)) currentWin = today;
     } catch (e) { currentWin = "free"; }
     loadWindow(currentWin);
@@ -1279,7 +1385,15 @@ window.ChatPage = (function () {
   }
 
   function openWindow(id, opts) {
-    const target = (id && winList().some(w => w.id === id)) ? id : "free";
+    let target = id;
+    // W1–W20 现在是分组，不可对话 → 落到今天的窗口并归到该周
+    if (target && /^W\d+$/.test(target)) {
+      const today = dayKey();
+      ensureDay(today);
+      setDayOwner(today, target);
+      target = today;
+    }
+    if (!target || !winList().some(w => w.id === target)) target = "free";
     App.go("chat");
     setWindow(target);
     if (opts && opts.focus) {

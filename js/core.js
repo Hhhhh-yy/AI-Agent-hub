@@ -48,9 +48,18 @@ window.App = (function () {
     /* 局域网模式的访问令牌：从网址 ?k= 取一次并记住 */
     resolveToken() {
       try {
-        const q = new URLSearchParams(location.search).get("k");
+        const params = new URLSearchParams(location.search);
+        const q = params.get("k");
         if (q && q.trim()) localStorage.setItem("agent-hub-token", q.trim());
         App.state.token = (q && q.trim()) || localStorage.getItem("agent-hub-token") || "";
+        // ?u=<slug>：把「这台设备是谁」钉死在网址里。
+        // 同学用带 ?u=u2 的专属链接进来，即使她清了浏览器缓存 / 换了浏览器，
+        // 也还是她自己，不会跑到别人名下。普通访客不带 ?u= 则进主账号。
+        const u = params.get("u");
+        if (u && u.trim()) {
+          localStorage.setItem("agent-hub-current-user", u.trim());
+          App.state.pinnedUser = u.trim();
+        }
       } catch (e) { App.state.token = ""; }
     },
 

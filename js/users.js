@@ -66,15 +66,15 @@ window.Users = (function () {
     const exists = slug && state.users.some(u => u.slug === slug);
     if (!exists) {
       const ghost = slug;
-      slug = state.active || (state.users.find(u => u.primary) || state.users[0]).slug;
+      // 新浏览器（没有任何本地记录）一律先进「主账号」。
+      // 服务端的 active 只代表「最近有谁动过」，不代表这台设备是谁；
+      // 跟着它走会让同学一打开就进到别人名下，看到别人的进度和画像。
+      slug = (state.users.find(u => u.primary) || state.users[0]).slug;
       try { localStorage.setItem(LS_USER, slug); } catch (e) {}
       if (ghost) {
-        // 清掉这个幽灵成员残留的本地缓存，避免下次又读到脏数据
-        try {
-          Object.keys(localStorage).forEach(function (k) {
-            if (k.indexOf("::" + ghost) !== -1) localStorage.removeItem(k);
-          });
-        } catch (e) {}
+        // 注意：被删掉的是「成员本身」，不是本地缓存坏了。
+        // 不要顺手清 ::ghost 的缓存 —— 万一是误删又被恢复，缓存还能帮上忙；
+        // 清理动作留给服务端确认该成员真的不存在之后再做。
         App.toast("原成员（" + ghost + "）已不存在，已切回「" + slug + "」", "bad");
       }
     }

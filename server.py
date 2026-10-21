@@ -574,6 +574,96 @@ def _ufile(name, slug=None):
     return user_dir(slug) / name
 
 
+def merge_progress(old, new):
+    """把「新提交的进度」和「磁盘上已有的进度」合并，规则是**只增不减**。
+
+    为什么需要：前端在某些情况下（本地缓存没读到、换了浏览器、切换成员瞬间）
+    可能把一份几乎空的进度推上来。如果直接覆盖，打卡记录就没了。
+    这里保证：
+      · 每周的 done 取并集
+      · hours 取较大值
+      · note 非空优先，两边都有就保留新的
+      · resume 取 updatedAtISO 更新的一份
+      · interview.rounds / questions 取较多的一方（不丢历史）
+    正常的「取消打卡」由前端显式处理，不走这个兜底。
+    """
+    if not isinstance(new, dict):
+        new = {}
+    if not isinstance(old, dict) or not old:
+        return new
+
+    out = dict(new)
+    old_weeks = old.get("weeks") or {}
+    new_weeks = new.get("weeks") or {}
+    if not isinstance(old_weeks, dict):
+        old_weeks = {}
+    if not isinstance(new_weeks, dict):
+        new_weeks = {}
+
+    merged_weeks = {}
+    for wk in set(old_weeks) | set(new_weeks):
+        a = old_weeks.get(wk) if isinstance(old_weeks.get(wk), dict) else {}
+        b = new_weeks.get(wk) if isinstance(new_weeks.get(wk), dict) else {}
+        done = list(a.get("done") or [])
+        for t in (b.get("done") or []):
+            if t not in done:
+                done.append(t)
+        merged_weeks[wk] = {
+            "done": done,
+            "hours": max(_num(a.get("hours")), _num(b.get("hours"))),
+            "note": b.get("note") or a.get("note") or "",
+        }
+    out["weeks"] = merged_weeks
+
+    # 面试记录只增不减
+    oi = old.get("interview") if isinstance(old.get("interview"), dict) else {}
+    ni = new.get("interview") if isinstance(new.get("interview"), dict) else {}
+    orounds = oi.get("rounds") or []
+    nrounds = ni.get("rounds") or []
+    if isinstance(orounds, list) and isinstance(nrounds, list) and len(orounds) > len(nrounds):
+        out["interview"] = dict(ni)
+        out["interview"]["rounds"] = orounds
+
+    # 题库记录只增不减
+    oq = old.get("questions") or []
+    nq = new.get("questions") or []
+    if isinstance(oq, list) and isinstance(nq, list) and len(oq) > len(nq):
+        out["questions"] = oq
+
+    # 简历取更新的那份
+    orr = old.get("resume")
+    nrr = new.get("resume")
+    if isinstance(orr, dict) and isinstance(nrr, dict):
+        def _t(x):
+            return parse_iso(x.get("updatedAtISO")) or 0
+        out["resume"] = nrr if _t(nrr) >= _t(orr) else orr
+    elif isinstance(orr, dict) and not isinstance(nrr, dict):
+        out["resume"] = orr
+
+    return out
+
+
+def parse_iso(s):
+    """把 ISO 时间字符串转成可比较的数字；解析不了返回 0。"""
+    if not s or not isinstance(s, str):
+        return 0
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except Exception:  # noqa: BLE001
+        try:
+            return time.mktime(time.strptime(s[:19], "%Y-%m-%dT%H:%M:%S"))
+        except Exception:  # noqa: BLE001
+            return 0
+
+
+def _num(v, default=0):
+    """把可能是字符串/None 的数字安全转成 float。"""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
 def progress_file(slug=None):
     return _ufile("progress.json", slug)
 
@@ -1902,12 +1992,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._error("progress 必须是对象")
         progress["updatedAt"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with _lock:
-            save_json(progress_file(), progress)
+            # 防「越存越少」：前端如果因为缓存没加载好把空状态推上来，会把已有打卡覆盖掉。
+            # 这里做一次兜底：新状态比磁盘上的少，就保留磁盘里的 done（并集）。
+            old = load_json(progress_file(), None)
+            merged = merge_progress(old, progress)
+            save_json(progress_file(), merged)
+            # 每次保存都留一份「上一次正常状态」，进度文件万一坏了能立刻回退
+            try:
+                save_json(_ufile("progress.prev.json"), merged)
+            except Exception:  # noqa: BLE001
+                pass
             try:
                 write_report()
             except Exception as e:  # noqa: BLE001
                 sys.stderr.write("写进度报告失败: %s\n" % e)
-        return self._json({"ok": True, "savedAt": progress["updatedAt"], "report": str(WORKSPACE_REPORT)})
+        return self._json({"ok": True, "savedAt": merged["updatedAt"], "report": str(WORKSPACE_REPORT)})
 
     # ---------------- api: chat ---------------- #
     def _post_chat(self, body):
@@ -2162,6 +2261,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     global ACCESS_TOKEN
+    # Windows 控制台默认 GBK，打印 ⚠️ / emoji 会直接 UnicodeEncodeError 把服务打崩。
+    # 改成 utf-8 + replace：编不出的字符变成 ?，绝不让「打一行日志」弄挂整个服务。
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
     ap = argparse.ArgumentParser(description="AI Agent 学习中枢 · 本地服务")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--host", default="127.0.0.1")
@@ -2180,6 +2286,15 @@ def main():
     migrate_to_multi_user()
     refresh_machine()
     users = load_users()["users"]
+
+    # 更新/误删之后的自检：注册过的成员如果 data 目录没了，说明进度和画像被覆盖了。
+    # 只告警 + 提示怎么还原，绝不自动改数据（还原动作由 state_backup.py 负责）。
+    missing_members = []
+    for u in users:
+        d = user_dir(u["slug"])
+        if not d.exists() or not (d / "progress.json").exists():
+            missing_members.append(u)
+
     for u in users:
         set_current_user(u["slug"])
         ensure_memory(u["slug"])
@@ -2217,6 +2332,15 @@ def main():
             print("  ⚠️ 没有检测到局域网地址（可能没连网），只能用本机打开。")
     print("  成员：%s" % "、".join("%s(%s)" % (u.get("name"), u["slug"]) for u in users))
     print("  数据目录：%s" % USERS_DIR)
+    if missing_members:
+        print("  " + "!" * 58)
+        print("  ⚠️ 发现成员数据缺失（进度/画像可能被更新覆盖了）：")
+        for u in missing_members:
+            print("        · %s（%s）" % (u.get("name"), u["slug"]))
+        print("  还原办法（不会影响其他成员）：")
+        print("        python state_backup.py list")
+        print("        python state_backup.py restore --latest")
+        print("  " + "!" * 58)
     print("  主成员报告：%s" % WORKSPACE_REPORT)
     s = public_settings()
     print("  模型 Key：%s" % ("已配置（%s）" % s["keySource"] if s["hasKey"] else "未配置（可在网页右上角设置）"))
