@@ -9,10 +9,10 @@ echo   更新前自动备份 state，更新后自动检查有没有人被覆盖
 echo ============================================================
 echo.
 
-REM 关键：本脚本自己也是「未跟踪/已修改」的文件之一。
-REM 如果用 git stash -u，会把它自己和 state_backup.py 一起收走，
-REM 导致脚本跑到一半时自己的文件消失（cmd 报 "The batch file cannot be found"）。
-REM 所以先把这两个工具文件 stage 起来，让 stash 不去动它们。
+REM this script is also an untracked/modified file
+REM git stash -u would stash this script itself
+REM causing 'The batch file cannot be found' mid-run
+REM so stage these tool files first
 git add apply-update.cmd state_backup.py UPDATE.md >nul 2>nul
 
 where python >nul 2>nul
@@ -41,7 +41,7 @@ for /f "delims=" %%s in ('git status --porcelain --untracked-files=no') do set "
 if defined DIRTY (
     echo       有未提交的改动, 会先 stash, 更新后还原:
     git status --short --untracked-files=no
-    REM 只用 -u 会连本脚本一起收走，所以这里只 stash 已跟踪文件的改动
+    REM no -u: it would stash this script too
     git stash push -m "auto-stash-before-update-!SNAP!"
     if errorlevel 1 (
         echo [错误] stash 失败，已中止。
@@ -55,7 +55,12 @@ if defined DIRTY (
 echo.
 
 REM ---------- 3) 拉取代码 ----------
-echo [3/4] 从 GitHub 拉取最新代码...
+REM record server.py hash before pull
+REM restart only if server.py changed
+set "OLD_SRV="
+set "NEW_SRV="
+for /f "delims=" %%h in ('git rev-parse HEAD:server.py 2^>nul') do set "OLD_SRV=%%h"
+echo [3/5] 从 GitHub 拉取最新代码...
 git pull --rebase --autostash
 if errorlevel 1 (
     echo.
@@ -65,10 +70,11 @@ if errorlevel 1 (
     if /i not "%~1"=="--auto" pause
     exit /b 1
 )
+for /f "delims=" %%h in ('git rev-parse HEAD:server.py 2^>nul') do set "NEW_SRV=%%h"
 echo.
 
 REM ---------- 4) 更新后：校验 state/ ----------
-echo [4/4] 检查进度与画像是否完好...
+echo [4/5] 检查进度与画像是否完好...
 python state_backup.py guard --before "!SNAP!"
 if errorlevel 1 (
     echo.
@@ -84,6 +90,31 @@ if defined STASHED (
     git stash pop
 )
 
+REM ---------- 5) 后端变了才重启服务 ----------
+echo.
+echo [5/5] 检查是否需要重启服务...
+set "NEED_RESTART="
+if /i not "!OLD_SRV!"=="!NEW_SRV!" set "NEED_RESTART=1"
+if not defined OLD_SRV if not defined NEW_SRV set "NEED_RESTART="
+
+if not defined NEED_RESTART (
+    echo       本次只改了前端文件, 不用重启.
+    echo       你和她各按一次 Ctrl+F5 就能看到新版.
+    goto :done
+)
+
+echo       server.py 有改动, 需要重启服务才生效.
+python restart_server.py
+if errorlevel 1 (
+    echo.
+    echo [警告] 自动重启失败. 代码已更新, 但新后端还没生效.
+    echo        请手动执行:
+    echo          python restart_server.py
+    if /i not "%~1"=="--auto" pause
+    exit /b 1
+)
+
+:done
 echo.
 echo ============================================================
 echo   更新完成，进度与画像全部完好

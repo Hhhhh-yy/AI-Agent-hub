@@ -101,6 +101,40 @@ python state_backup.py restore --name state-20261021-151445-baseline
 
 ---
 
+## 什么时候要重启服务
+
+| 改了什么 | 生效方式 | 原因 |
+|---|---|---|
+| `js/*.js`、`assets/css/style.css`、`index.html`、`data/**` | **刷新页面** | 服务器每次请求都现读磁盘 |
+| `state/` 里的数据（画像、进度） | **刷新页面** | API 本来就每次读文件 |
+| **`server.py`** | **必须重启** | Python 启动时把代码读进内存，之后不再看磁盘 |
+
+`apply-update.cmd` 的第 5 步会自动判断：拉取前后 `server.py` 的 git 哈希变了才重启，
+只改前端就跳过重启（避免白白断线）。
+
+### 手动重启
+
+服务是**隐藏启动**的（开机自启走启动文件夹 → `start-hidden.vbs`），
+**没有窗口可以关**。所以要这样：
+
+```powershell
+python restart_server.py            # 安全重启（推荐）
+python restart_server.py --status   # 只看状态，不重启
+```
+
+它会按端口 8787 精确找到进程、确认是 python 才结束、用同一条隐藏启动路径拉起、
+轮询 `/api/health` 确认真的起来了，并检查成员数据文件都还在。
+不会碰你其他的 Python 程序。
+
+> ⚠️ 别用 `Get-Process python | Stop-Process` 这种写法——那会杀掉你**所有** Python 进程。
+
+### 她那边要按 Ctrl+F5
+
+服务重启或代码更新后，她的标签页里还是旧 JS（在内存里，不会自己更新）。
+让她按一次 **Ctrl+F5** 强制刷新即可。
+
+---
+
 ## 保险起见
 
 - 你的 `backups/` 里还有每天 22:00 的整包备份（`AgentHub-Backup` 计划任务），
