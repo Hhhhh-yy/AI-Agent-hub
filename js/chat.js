@@ -469,6 +469,9 @@ window.ChatPage = (function () {
       "薄弱分类：" + d.weak,
       "===== 记忆区结束 =====",
       "",
+      "【跨窗口记忆说明】他这几天在不同日期的窗口里学过什么，会作为「背景资料」附在他本次提问的前面。",
+      "那些内容就是你的记忆，直接接着讲，绝不要回答「我看不到之前的对话」。",
+      "",
       "【看图能力】你可以看用户粘贴的截图。看到图片时先复述观察到的关键信息再回答；看不清就说看不清，不要猜。",
       "",
       "【画图规范】需要示意图时输出一个 ```svg 代码块：viewBox=\"0 0 900 520\"、浅色背景、中文标注、自包含、不使用 script / 外部资源 / foreignObject。",
@@ -925,7 +928,44 @@ window.ChatPage = (function () {
     $("#chatMessages").scrollTop = $("#chatMessages").scrollHeight;
 
     try {
-      const payload = [{ role: "system", content: systemPrompt() }].concat(history.slice(-SEND_WINDOW));
+      const hist = history.slice(-SEND_WINDOW);
+      const payload = [{ role: "system", content: systemPrompt() }];
+
+      // 跨窗口记忆必须放进 user 消息里，不能只放 system prompt。
+      // 实测：只写在 system 里，模型会当成「外部说明」而不认，
+      // 仍回答「我看不到昨天的对话记录」；放在 user 消息里它才当成真实上下文。
+      const mem = crossWindowMemory();
+      if (mem && hist.length) {
+        // 挂到「最后一条用户消息」前面，作为背景资料，不污染历史
+        const lastUser = (function () {
+          for (let i = hist.length - 1; i >= 0; i--) if (hist[i].role === "user") return i;
+          return -1;
+        })();
+        if (lastUser >= 0) {
+          const orig = hist[lastUser];
+          const text = typeof orig.content === "string"
+            ? orig.content
+            : (Array.isArray(orig.content)
+                ? orig.content.filter(p => p && p.type === "text").map(p => p.text || "").join(" ")
+                : "");
+          const merged = {
+            role: "user",
+            content: mem + "\n（上面是我这几天在这个网站上的学习记录，请当作你已经知道的事，别再说「看不到之前的对话」。）\n\n我这次问：" + text
+          };
+          if (Array.isArray(orig.content)) {
+            // 保留图片：把图片部分接回去
+            merged.content = [{ type: "text", text: merged.content }]
+              .concat(orig.content.filter(p => p && p.type !== "text"));
+          }
+          payload.push.apply(payload, hist.slice(0, lastUser));
+          payload.push(merged);
+        } else {
+          payload.push.apply(payload, hist);
+        }
+      } else {
+        payload.push.apply(payload, hist);
+      }
+
       const body = { messages: payload, temperature: 0.4 };
       if (options.thinking) body.thinking = options.thinking;
       const res = await App.post("/api/chat", body);
@@ -1165,6 +1205,139 @@ window.ChatPage = (function () {
     });
     const more = $("#watchBar [data-watch-more]");
     if (more) more.addEventListener("click", function () { App.go("memory"); });
+  }
+
+  /* ====================== 跨窗口记忆 ======================
+     之前每个日期窗口是孤岛：发送时只带当前窗口 history，system prompt 里
+     也没有别的窗口内容，所以「昨天讲到哪、卡在哪」今天完全不知道。
+     这里做两件事把它们接起来：
+       1) 收集其它窗口的对话，压成「上次做到哪」的摘要送进 system prompt
+       2) 附上最近一次窗口的小结（做得好/还薄弱/下一步）
+     不做全文拼接（token 会炸），只取每个窗口末尾几轮的关键内容。 */
+
+  const CROSS_MEMORY_CHARS = 1600;   // 跨窗口记忆总预算（小结 + 摘录一起算）
+  const CROSS_WINDOW_TAIL = 2;       // 每个历史窗口只取最后 2 轮
+  const CROSS_MAX_WINDOWS = 4;       // 最多看最近 4 个有对话的窗口
+  const ASK_CHARS = 80;              // 我的提问截断长度
+  const ANS_CHARS = 60;              // 它的回答截断长度（只要一句方向即可）
+
+  function allWindowIds() {
+    const ids = [];
+    savedDays().forEach(d => ids.push(d.id));
+    if (ids.indexOf("free") === -1) ids.push("free");
+    return ids;
+  }
+
+  function readWindowHistory(id) {
+    try {
+      const raw = localStorage.getItem(winStorageKey(id));
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+
+  function msgText(m) {
+    if (typeof m.content === "string") return m.content;
+    if (Array.isArray(m.content)) {
+      return m.content.filter(p => p && p.type === "text").map(p => p.text || "").join(" ");
+    }
+    return "";
+  }
+
+  /* 把某窗口压成几行：只留「我问了什么 / 它答的第一句」，够判断进度即可 */
+  function digestWindow(id) {
+    const h = readWindowHistory(id);
+    const pairs = [];
+    let lastUser = "";
+    h.forEach(function (m) {
+      if (m.role === "user") {
+        const t = msgText(m).trim().replace(/\s+/g, " ");
+        // 跳过「手把手/深挖」这种自动注入的长提示词，只留真人提问
+        if (t && t.indexOf("# 请对我做一次") === -1 && t.indexOf("# 请带我把这件事") === -1) {
+          lastUser = t.slice(0, ASK_CHARS);
+        }
+      } else if (m.role === "assistant" && lastUser) {
+        // 只取回答的第一句：后面通常是步骤细节，对「接上下文」没用
+        let a = msgText(m).trim().replace(/\s+/g, " ");
+        const cut = a.search(/[。！？\n]/);
+        if (cut > 0 && cut < ANS_CHARS) a = a.slice(0, cut);
+        else a = a.slice(0, ANS_CHARS);
+        pairs.push({ q: lastUser, a: a });
+        lastUser = "";
+      }
+    });
+    return pairs.slice(-CROSS_WINDOW_TAIL);
+  }
+
+  function crossWindowMemory() {
+    const ids = allWindowIds().filter(id => id !== currentWin);
+    const lines = [];
+    let budget = CROSS_MEMORY_CHARS;
+
+    // ① 优先：已生成的小结（信息密度最高，先占预算）
+    let sums = {};
+    try { sums = JSON.parse(localStorage.getItem(App.userKey(LS_SUMMARY)) || "{}"); } catch (e) { sums = {}; }
+    const sumIds = Object.keys(sums).filter(id => id !== currentWin).sort();
+    if (sumIds.length) {
+      const block = [];
+      for (const id of sumIds.slice(-3).reverse()) {
+        const s = sums[id] || {};
+        const meta = winMeta(id);
+        const parts = [];
+        if (s.good) parts.push("做到了：" + s.good);
+        if (s.weak) parts.push("卡在：" + s.weak);
+        if (s.next) parts.push("下一步：" + s.next);
+        if (!parts.length) continue;
+        const line = "· " + meta.label + " → " + parts.join("；");
+        if (line.length > budget) break;
+        block.push(line);
+        budget -= line.length;
+      }
+      if (block.length) {
+        lines.push("【之前窗口的小结（他自己点「分析」生成的，可信度高，优先参考）】", block.join("\n"), "");
+      }
+    }
+
+    // ② 其次：最近几个有对话的窗口，取末尾几轮原话
+    const withTalk = ids.map(function (id) {
+      return { id: id, pairs: digestWindow(id) };
+    }).filter(x => x.pairs.length);
+    withTalk.sort((a, b) => (a.id < b.id ? 1 : -1));   // 日期窗口 id 可按名字排序，新的在前
+
+    if (withTalk.length && budget > 200) {
+      const head = "【最近几个窗口聊过什么（原话摘录，越靠前越近）】";
+      lines.push(head);
+      const seen = {};      // 去重：同一句提问在多个窗口重复出现时只留第一次
+      let shown = 0;
+      for (const w of withTalk.slice(0, CROSS_MAX_WINDOWS)) {
+        if (budget <= 150) break;
+        const meta = winMeta(w.id);
+        const wl = ["◆ " + meta.label + " " + meta.title];
+        let wlen = wl[0].length;
+        for (const p of w.pairs) {
+          const sig = p.q.slice(0, 40);
+          if (seen[sig]) continue;      // 已经说过同样的话，跳过
+          const line = "  我：" + p.q + " ／ 它：" + p.a;
+          if (wlen + line.length > budget) break;
+          seen[sig] = 1;
+          wl.push(line);
+          wlen += line.length;
+        }
+        if (wl.length > 1) {
+          lines.push(wl.join("\n"));
+          budget -= wlen;
+          shown++;
+        }
+      }
+      if (!shown) lines.pop();
+      else lines.push("");
+    }
+
+    if (!lines.length) return "";
+    return ["===== 跨窗口记忆（其他窗口发生过的事，你要接上，不要当第一次见面）====="]
+      .concat(lines)
+      .concat(["===== 跨窗口记忆结束 =====", ""])
+      .join("\n");
   }
 
   /* ====================== 本窗口小结 ====================== */
