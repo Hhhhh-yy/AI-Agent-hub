@@ -1167,7 +1167,7 @@ window.ChatPage = (function () {
       "",
       "【我的情况】我是完全初学者，看不懂没解释的专业名词；用的是 Windows 11 + 管理员权限的 PowerShell 7（pwsh），请给能直接粘贴的命令。",
       "",
-      WORKSPACE_RULES.join("\n"),
+      workspaceRules().join("\n"),
       "",
       "【必须遵守的讲解规则】",
       "1. 任何术语第一次出现，必须紧跟括号用大白话解释。一句话里出现 3 个以上新词，先用两三句打比方把整件事讲明白。",
@@ -1219,7 +1219,7 @@ window.ChatPage = (function () {
       "",
       "【我的情况】初学者，术语必须第一次出现就用括号解释。讲完先不要给我练习题，等我追问。",
       "",
-      WORKSPACE_RULES.join("\n"),
+      workspaceRules().join("\n"),
       "",
       "",
       CODE_RULES.join("\n")
