@@ -174,6 +174,76 @@ window.ChatPage = (function () {
     return /^day-/.test(id) || id === "free";
   }
 
+  /* ====================== 每人自己的代码根目录 ======================
+     之前把 "C:\Users\Giraffe\code\agent-lab" 写死在提示词里，
+     结果同学（多人共用同一站点）拿到的全是我的路径，她没法用。
+     现在改成：按成员从「长期记忆 → 环境备注」里读，
+     读不到就用她自己的 Windows 用户名推一个默认值，绝不串到别人身上。 */
+
+  const CODE_ROOT_KEY = "代码根目录";
+  const CODE_ROOT_DEFAULT_TAIL = "\\code\\agent-lab";
+
+  function currentCodeRoot() {
+    const m = App.state.memory || {};
+    // ① 优先读环境备注里显式配置的（用户可改）
+    const env = m.environment_notes || {};
+    let root = String(env[CODE_ROOT_KEY] || "").trim();
+    if (root) return root.replace(/[\\/]+$/, "");
+
+    // ② 其次看画像里有没有
+    const p = m.profile || {};
+    root = String(p[CODE_ROOT_KEY] || "").trim();
+    if (root) return root.replace(/[\\/]+$/, "");
+
+    // ③ 兜底：用这台机器当前成员的 Windows 用户名推默认值。
+    //    App.state.memory.devices 里可能有「电脑环境」，但更稳的是问浏览器拿不到用户名，
+    //    所以退而求其次：用成员自己的环境备注/画像里的线索，再不行就给占位符。
+    return "";
+  }
+
+  /* 没有配置时，给一个明确但中性的路径，让人一眼知道要改成自己的 */
+  function codeRootOrPlaceholder() {
+    const r = currentCodeRoot();
+    if (r) return { path: r, configured: true, name: r.split(/[\\/]/).filter(Boolean).pop() || "agent-lab" };
+    return { path: "%USERPROFILE%\\code\\agent-lab", configured: false, name: "agent-lab" };
+  }
+
+  function workspaceRules() {
+    const c = codeRootOrPlaceholder();
+    const root = c.path;
+    const base = c.name;
+    const parent = root.replace(/[\\/][^\\/]+$/, "");
+    const lines = [
+      "【工作目录硬约束（违反算回答失败）】",
+      "· 我的代码根目录是 `" + root + "`。",
+      "· **本任务要建的文件，全部放进这个目录里**，不要在桌面或别处新建。",
+      "· 一周一个子目录，命名用 `week02`、`week03` 这种零填充格式；本周练习都放同一个子目录。"
+    ];
+    if (!c.configured) {
+      lines.push("· ⚠️ 如果上面这个路径和我实际的不一样，请**先问我一句「你的代码目录在哪」**，");
+      lines.push("  再按我说的路径来；不要自己编路径，也不要套用别人的用户名。");
+    }
+    lines.push(
+      "· 虚拟环境通常在根目录 `" + base + "\\.venv`。在 `week02` 里要用它，写 `..\\.venv\\Scripts\\python.exe -m ...`；",
+      "  或先进根目录激活一次 `.\\.venv\\Scripts\\Activate.ps1`，再 `Set-Location .\\week02`。",
+      "· 第一次进入时，第一条命令必须是「切到根目录 → 建本周目录 → 进去」，之后再写文件。",
+      "· **禁止**出现 `cd ~\\Desktop`、`C:\\Users\\<任何用户名>\\Desktop`、`$HOME\\Desktop` 这类路径。",
+      "· 若某个任务确实需要独立仓库（比如单独的项目 A/B），建在根目录的**兄弟目录**下：",
+      "  `" + parent + "\\<项目名>`，并说明「这个和 " + base + " 平级」。",
+      "· 每个步骤的「做什么」里要写清**当前所在目录**，让我随时知道自己站在哪。",
+      "· 结尾给一条 `Get-Location` 让我确认位置，并列出本步骤新建了哪些文件。",
+      "",
+      "【建文件的方式（这条也常被违反）】",
+      "· **不要用 `Set-Content` / `echo >` / here-string 把代码塞进终端**。",
+      "  我引号、缩进、中文任一处理错，文件就坏了，而且我根本没法在里面改。",
+      "· 正确做法：让我在 **VS Code** 里新建文件（`code .\\文件名.py` 打开），",
+      "  然后我把代码块**整段粘进去、Ctrl+S 保存**。这样我能读、能改、能对照注释。",
+      "· 如果必须用命令生成文件，只能用最简单的 `New-Item .\\x.py -Force` 建空文件，",
+      "  再让我用编辑器粘内容，不要把代码内容写进命令行。"
+    );
+    return lines;
+  }
+
   function winMeta(id) {
     const found = winList().find(w => w.id === id);
     if (found) return found;
@@ -506,11 +576,7 @@ window.ChatPage = (function () {
       "5. 不确定的技术细节要说明不确定，不要编造 API 或论文。",
       "6. 他是初学者：专业术语第一次出现必须用括号给一句大白话解释。",
       "7. 给命令时说明它在干什么、会改动电脑的哪一处。",
-      "8. **文件路径固定**：他所有练习代码的根目录是 `C:\\Users\\Giraffe\\code\\agent-lab`（已有 git 仓库和 .venv）。",
-      "    · 要建文件就放进 agent-lab 里，按 `weekNN` 分周目录；周目录第一次用到时先建再进。",
-      "    · 严禁用 `Desktop`、`~`、`$HOME` 作为建文件位置。",
-      "    · 需要独立仓库时放在 `C:\\Users\\Giraffe\\code\\<项目名>`，与 agent-lab 平级，并说明这一点。",
-      "    · 每步写清当前所在目录；结尾让他跑一次 `Get-Location` 确认。"
+      workspaceRules().join("\n")
     ].join("\n");
   }
 
@@ -982,6 +1048,41 @@ window.ChatPage = (function () {
       history.push({ role: "assistant", content: "⚠️ 请求失败：" + e.message });
     }
     renderHistory(); saveHistory();
+    maybeAutoSummarize();
+  }
+
+  /* ====================== 自动小结 ======================
+     手动点「分析」太容易被忘，而跨窗口记忆又依赖小结。
+     这里在每轮回答之后检查：这一窗的对话轮数越过阈值就自动生成一次，
+     每跨过 AUTO_SUM_STEP 轮再刷新一次，避免每句话都花一次调用。 */
+
+  const AUTO_SUM_FIRST = 4;    // 第一次：满 4 轮就生成
+  const AUTO_SUM_STEP = 6;     // 之后：每再涨 6 轮刷新一次
+  const AUTO_SUM_KEY = "agent-hub-autosum-v1";   // 记录每个窗口已自动小结到第几轮
+
+  function autoSumState() {
+    try { return JSON.parse(localStorage.getItem(App.userKey(AUTO_SUM_KEY)) || "{}") || {}; }
+    catch (e) { return {}; }
+  }
+
+  function setAutoSumState(o) {
+    try { localStorage.setItem(App.userKey(AUTO_SUM_KEY), JSON.stringify(o)); } catch (e) {}
+  }
+
+  function maybeAutoSummarize() {
+    if (!App.state.settings.hasKey || !App.state.serverOnline) return;
+    const rounds = history.filter(m => m.role === "user").length;
+    if (rounds < AUTO_SUM_FIRST) return;
+
+    const st = autoSumState();
+    const done = Number(st[currentWin] || 0);
+    // 已经小结过，并且还没涨够 AUTO_SUM_STEP 轮 → 不重复
+    if (done && rounds < done + AUTO_SUM_STEP) return;
+
+    // 先标记，防止并发重复生成
+    st[currentWin] = rounds;
+    setAutoSumState(st);
+    summarizeWindow({ silent: true });
   }
 
   /* ====================== 5 档深度 + 分工 ====================== */
@@ -1027,28 +1128,6 @@ window.ChatPage = (function () {
 
   /* 工作目录硬规则：所有练习文件必须落在固定位置，不许散在桌面。
      桌面是我放快捷方式的地方，堆满 .py 会很难找。 */
-  const WORKSPACE_RULES = [
-    "【工作目录硬约束（违反算回答失败）】",
-    "· 我的代码根目录固定在 `C:\\Users\\Giraffe\\code\\agent-lab`（已建好 git 仓库 + .venv）。",
-    "· **本任务要建的文件，全部放进 `agent-lab` 里面**，不要在桌面或别处新建。",
-    "· 一周一个子目录，命名用 `week02`、`week03` 这种零填充格式；本周练习都放同一个子目录。",
-    "· 虚拟环境在根目录：`agent-lab\\.venv`。在 `week02` 里要用它，写 `..\\.venv\\Scripts\\python.exe -m ...`。",
-    "  或者干脆先进根目录激活一次：`.\\.venv\\Scripts\\Activate.ps1`，再 `Set-Location .\\week02`。",
-    "· 第一次进入时，第一条命令必须是「切到根目录 → 建本周目录 → 进去」，之后再写文件。",
-    "· **禁止**出现 `cd ~\\Desktop`、`C:\\Users\\...\\Desktop`、`$HOME\\Desktop` 这类路径。",
-    "· 若某个任务确实需要独立仓库（比如单独的项目 A/B），建在 `agent-lab` 的**兄弟目录**下：",
-    "  `C:\\Users\\Giraffe\\code\\<项目名>`，并说明「这个和 agent-lab 平级」。",
-    "· 每个步骤的「做什么」里要写清**当前所在目录**，让我随时知道自己站在哪。",
-    "· 结尾给一条 `Get-Location` 让我确认位置，并列出本步骤新建了哪些文件。",
-    "",
-    "【建文件的方式（这条也常被违反）】",
-    "· **不要用 `Set-Content` / `echo >` / here-string 把代码塞进终端**。",
-    "  我引号、缩进、中文任一处理错，文件就坏了，而且我根本没法在里面改。",
-    "· 正确做法：让我在 **VS Code** 里新建文件（`code .\\文件名.py` 打开），",
-    "  然后我把代码块**整段粘进去、Ctrl+S 保存**。这样我能读、能改、能对照注释。",
-    "· 如果必须用命令生成文件，只能用最简单的 `New-Item .\\x.py -Force` 建空文件，",
-    "  再让我用编辑器粘内容，不要把代码内容写进命令行。"
-  ];
 
   const FORMAT_RULES = [
     "【排版硬约束（违反任何一条都算回答失败）】",
@@ -1358,13 +1437,20 @@ window.ChatPage = (function () {
       '<div class="ws-row next"><b>下一步</b><span>' + App.escape(s2.next || "—") + '</span></div>';
   }
 
-  async function summarizeWindow() {
+  async function summarizeWindow(opts) {
+    const silent = !!(opts && opts.silent);
     const box = $("#winSummary");
     const btn = $("#btnSummarizeWin");
     const users = history.filter(m => m.role === "user").length;
-    if (!users) { App.toast("这个窗口还没有对话，先聊几句再分析", "bad"); return; }
-    if (btn) { btn.disabled = true; btn.textContent = "分析中…"; }
-    if (box) box.innerHTML = '<p class="muted small">正在读这一窗的 ' + users + ' 轮对话…</p>';
+    if (!users) {
+      if (!silent) App.toast("这个窗口还没有对话，先聊几句再分析", "bad");
+      return;
+    }
+    // 静默模式（自动小结）不动按钮、不改提示区，避免打断正在看的对话
+    if (!silent) {
+      if (btn) { btn.disabled = true; btn.textContent = "分析中…"; }
+      if (box) box.innerHTML = '<p class="muted small">正在读这一窗的 ' + users + ' 轮对话…</p>';
+    }
 
     const transcript = history.filter(m => m.role !== "system").slice(-20).map(function (m) {
       let txt = "";
@@ -1399,11 +1485,16 @@ window.ChatPage = (function () {
       all[currentWin] = rec;
       localStorage.setItem(App.userKey(LS_SUMMARY), JSON.stringify(all));
       renderWinSummary();
-      App.toast("本窗口小结已更新", "ok");
+      if (!silent) App.toast("本窗口小结已更新", "ok");
     } catch (e) {
-      if (box) box.innerHTML = '<p class="muted small">分析失败：' + App.escape(e.message) + '</p>';
+      if (box && !silent) box.innerHTML = '<p class="muted small">分析失败：' + App.escape(e.message) + '</p>';
+      // 自动小结失败就回退标记，下一轮再试，不要永久卡住
+      if (silent) {
+        const st = autoSumState();
+        if (st[currentWin]) { delete st[currentWin]; setAutoSumState(st); }
+      }
     }
-    if (btn) { btn.disabled = false; btn.textContent = "分析"; }
+    if (btn && !silent) { btn.disabled = false; btn.textContent = "分析"; }
   }
 
   /* ====================== 教学插图 ====================== */
@@ -1615,6 +1706,9 @@ window.ChatPage = (function () {
   return {
     init: init, onEnter: onEnter, renderProgress: renderProgress,
     teachTask: teachTask, deepTask: deepTask, openWindow: openWindow,
-    summarizeWindow: summarizeWindow
+    summarizeWindow: summarizeWindow,
+    /* 便于排查/测试：当前成员的工作目录规则与记忆 */
+    workspaceRules: workspaceRules, codeRoot: codeRootOrPlaceholder,
+    crossWindowMemory: crossWindowMemory
   };
 })();

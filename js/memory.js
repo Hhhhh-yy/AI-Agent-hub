@@ -71,12 +71,19 @@ window.MemoryPage = (function () {
   function renderEnvNotes() {
     const notes = mem().environment_notes || {};
     const keys = Object.keys(notes);
-    $("#memEnvNotes").innerHTML = keys.length ? keys.map((k, i) =>
+    const missingRoot = !String(notes["代码根目录"] || "").trim();
+    const hint = missingRoot
+      ? '<p class="muted small" style="color:#fbbf24;margin-bottom:8px">⚠️ 还没填「代码根目录」。' +
+        '不填的话，教学里给的路径是通用的，可能和你的电脑不一致。' +
+        '点「➕ 加一条」，标题写 <b>代码根目录</b>，内容填你自己的，例如 ' +
+        '<code>D:\\code\\agent-lab</code>。</p>'
+      : "";
+    $("#memEnvNotes").innerHTML = hint + (keys.length ? keys.map((k, i) =>
       '<div class="mem-kv-edit">' +
       '<input type="text" data-envnote-key="' + i + '" value="' + App.escape(k) + '" placeholder="标题">' +
       '<textarea data-envnote-val="' + i + '" rows="2" placeholder="内容">' + App.escape(notes[k]) + '</textarea>' +
       '<button class="ed-del" data-del-envnote="' + i + '" title="删除">✕</button>' +
-      '</div>').join("") : '<p class="muted small">还没有补充说明。</p>';
+      '</div>').join("") : '<p class="muted small">还没有补充说明。</p>');
   }
 
   /* ---------------- 长期备注 ---------------- */
