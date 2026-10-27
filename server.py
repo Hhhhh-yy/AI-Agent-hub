@@ -2310,7 +2310,12 @@ def main():
     ap.add_argument("--lan", action="store_true",
                     help="局域网共享模式：监听 0.0.0.0 并启用访问令牌")
     ap.add_argument("--no-token", action="store_true", help="局域网模式下也不要求令牌（不推荐）")
-    ap.add_argument("--no-browser", action="store_true")
+    # 默认不弹浏览器；要自动打开必须显式加 --browser。
+    # 反过来设计是因为开机自启/隐藏启动时弹窗很烦，而手动启动时看一眼终端里的链接就够。
+    ap.add_argument("--browser", action="store_true",
+                    help="启动后自动打开浏览器（默认不打开）")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="（保留兼容，现在是默认行为）")
     args = ap.parse_args()
 
     if args.lan:
@@ -2408,7 +2413,8 @@ def main():
     except Exception as e:  # noqa: BLE001
         sys.stderr.write("写访问链接文件失败：%s\n" % e)
 
-    if not args.no_browser:
+    # 默认不打开浏览器。只有显式传 --browser 才弹（--no-browser 保留兼容，等同默认）。
+    if args.browser and not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
 
     try:

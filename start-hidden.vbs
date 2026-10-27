@@ -1,6 +1,8 @@
 ' ============================================================
-'  Hidden launcher for auto-start: no console window, logs to state\server.log
-'  Manual test: double-click this file, then open http://127.0.0.1:8787/
+'  Hidden launcher: no console window, logs to state\server.log
+'  Double-click to start the hub in the background.
+'  Does NOT run at boot. Does NOT open a browser.
+'  Then open http://127.0.0.1:8787/ yourself.
 ' ============================================================
 Option Explicit
 Dim fso, sh, here

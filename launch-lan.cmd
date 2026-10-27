@@ -1,7 +1,8 @@
 @echo off
 rem ============================================================
-rem  Start the hub in LAN sharing mode, hidden (for auto-start).
+rem  Start the hub in LAN sharing mode, hidden (no console window).
 rem  Log: state\server.log
+rem  Manual start only - NOT registered to run at boot.
 rem  NOTE: keep this file ASCII-only. cmd.exe parses .cmd files
 rem  using the OEM codepage, so non-ASCII comments break parsing.
 rem ============================================================

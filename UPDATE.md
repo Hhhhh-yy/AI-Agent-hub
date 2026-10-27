@@ -114,7 +114,7 @@ python state_backup.py restore --name state-20261021-151445-baseline
 
 ### 手动重启
 
-服务是**隐藏启动**的（开机自启走启动文件夹 → `start-hidden.vbs`），
+服务是**隐藏启动**的（双击 `start-hidden.vbs`，无窗口、日志写 `state\server.log`），
 **没有窗口可以关**。所以要这样：
 
 ```powershell
